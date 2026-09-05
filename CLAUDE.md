@@ -28,6 +28,7 @@ Ce principe gouverne le versioning, le soft-delete et la conformité audit (Qual
 - Auth Supabase (email/mot de passe). Permissions vérifiées côté serveur ET par policies RLS : élève = ses données uniquement, formateur = ses sessions, super-admin = tout.
 - Fichiers via Supabase Storage avec URLs signées, jamais publics.
 - `SUPABASE_SERVICE_ROLE_KEY` : serveur uniquement, jamais dans du code client ni dans un commit.
+- **Toute Server Action qui écrit en base DOIT appeler `requirePermission(...)` (`src/lib/auth/session.ts`) AVANT la moindre écriture.** Il n'existe aucune policy RLS d'écriture et Prisma (rôle `postgres`) contourne le RLS : cette vérification est la seule barrière. Le code ne teste jamais un rôle, uniquement des permissions.
 
 ## Design (spec §3) — sobriété façon Notion
 
