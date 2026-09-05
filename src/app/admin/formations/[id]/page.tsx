@@ -14,7 +14,6 @@ import {
   addLesson,
   removeLesson,
 } from "@/lib/actions/formations";
-import { createQuickSession } from "@/lib/actions/sessions";
 import { FORMATION_VERSION_STATUS, SESSION_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -26,7 +25,6 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { NewVersionForm } from "@/components/formations/new-version-form";
-import { QuickSessionForm } from "@/components/formations/quick-session-form";
 
 export default async function FormationPage({ params, searchParams }: PageProps<"/admin/formations/[id]">) {
   const { id } = await params;
@@ -239,7 +237,14 @@ export default async function FormationPage({ params, searchParams }: PageProps<
 
       {/* ─── Sessions (axe Formation, prémices de la double vue) ──────────── */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Sessions</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Sessions</h2>
+          {canCreateSession ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/sessions/nouvelle?formationId=${formation.id}`}>Nouvelle session</Link>
+            </Button>
+          ) : null}
+        </div>
         {allSessions.length === 0 ? (
           <EmptyState title="Aucune session pour cette formation" />
         ) : (
@@ -255,7 +260,11 @@ export default async function FormationPage({ params, searchParams }: PageProps<
             <TableBody>
               {allSessions.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/admin/sessions/${s.id}`} className="hover:underline">
+                      {s.name}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <Link href={`/admin/formations/${formation.id}?v=${s.versionNumber}`} className="hover:underline">
                       v{s.versionNumber}
@@ -272,8 +281,8 @@ export default async function FormationPage({ params, searchParams }: PageProps<
             </TableBody>
           </Table>
         )}
-        {canCreateSession ? (
-          <QuickSessionForm action={createQuickSession.bind(null, formation.id)} activeVersionNumber={active?.versionNumber ?? null} />
+        {canCreateSession && !active ? (
+          <p className="text-sm text-foreground-tertiary">Publie une version pour pouvoir créer une session.</p>
         ) : null}
       </section>
     </div>

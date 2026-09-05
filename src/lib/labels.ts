@@ -26,3 +26,11 @@ export const SESSION_STATUS: Record<SessionStatus, { label: string; tone: Status
   done: { label: "Terminée", tone: "green" },
   cancelled: { label: "Annulée", tone: "red" },
 };
+
+import type { EnrollmentStatus } from "@/generated/prisma/enums";
+
+export const ENROLLMENT_STATUS: Record<EnrollmentStatus, { label: string; tone: StatusTone }> = {
+  active: { label: "En cours", tone: "blue" },
+  completed: { label: "Terminé", tone: "green" },
+  dropped: { label: "Abandon", tone: "red" },
+};
