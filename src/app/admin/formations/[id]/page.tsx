@@ -14,7 +14,7 @@ import {
   addLesson,
   removeLesson,
 } from "@/lib/actions/formations";
-import { FORMATION_VERSION_STATUS, SESSION_STATUS } from "@/lib/labels";
+import { FORMATION_VERSION_STATUS, SESSION_STATUS, ENROLLMENT_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,12 @@ export default async function FormationPage({ params, searchParams }: PageProps<
             orderBy: { order: "asc" },
             include: { lessons: { orderBy: { order: "asc" } }, _count: { select: { exercises: true } } },
           },
-          sessions: { orderBy: { startDate: "desc" } },
+          sessions: {
+            orderBy: { startDate: "desc" },
+            include: {
+              enrollments: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { enrolledAt: "asc" } },
+            },
+          },
           _count: { select: { processTemplates: true, messageTemplates: true } },
         },
       },
@@ -61,6 +66,9 @@ export default async function FormationPage({ params, searchParams }: PageProps<
   const isDraft = current.status === "draft";
   const canEditContent = isDraft && !isArchived;
   const allSessions = versions.flatMap((x) => x.sessions.map((s) => ({ ...s, versionNumber: x.versionNumber })));
+  const allEnrollments = allSessions.flatMap((s) =>
+    s.enrollments.map((en) => ({ ...en, sessionName: s.name, sessionStatus: s.status, versionNumber: s.versionNumber })),
+  );
   const canCreateSession = hasPermission(me, "can_manage_sessions") && !isArchived;
 
   return (
@@ -255,6 +263,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                 <TableHead>Version</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Dates</TableHead>
+                <TableHead className="text-right">Inscrits</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -276,6 +285,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                   <TableCell className="text-foreground-secondary">
                     {formatDate(s.startDate)} → {formatDate(s.endDate)}
                   </TableCell>
+                  <TableCell className="text-right tabular-nums">{s.enrollments.length}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -284,6 +294,49 @@ export default async function FormationPage({ params, searchParams }: PageProps<
         {canCreateSession && !active ? (
           <p className="text-sm text-foreground-tertiary">Publie une version pour pouvoir créer une session.</p>
         ) : null}
+      </section>
+
+      {/* ─── Axe Formation → sessions → élèves (anciens inclus, spec §10.1) ─ */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Élèves</h2>
+        <p className="text-sm text-foreground-secondary">
+          Toutes sessions et versions confondues, anciens élèves, abandons et sessions annulées inclus.
+        </p>
+        {allEnrollments.length === 0 ? (
+          <EmptyState title="Aucun élève inscrit à cette formation" />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Élève</TableHead>
+                <TableHead>Session</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Inscription</TableHead>
+                <TableHead>Terminé le</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allEnrollments.map((en) => {
+                const es = ENROLLMENT_STATUS[en.status];
+                return (
+                  <TableRow key={en.id}>
+                    <TableCell>
+                      <Link href={`/admin/eleves/${en.user.id}`} className="font-medium hover:underline">{en.user.name}</Link>
+                      <span className="block text-xs text-foreground-tertiary">{en.user.email}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Link href={`/admin/sessions/${en.sessionId}`} className="hover:underline">{en.sessionName}</Link>
+                      {en.sessionStatus === "cancelled" ? <span className="ml-2 text-xs text-foreground-tertiary">(annulée)</span> : null}
+                    </TableCell>
+                    <TableCell className="text-foreground-secondary">v{en.versionNumber}</TableCell>
+                    <TableCell><StatusBadge tone={es.tone}>{es.label}</StatusBadge></TableCell>
+                    <TableCell className="text-foreground-secondary">{formatDate(en.completedAt)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </section>
     </div>
   );

@@ -124,7 +124,7 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
                 return (
                   <TableRow key={en.id}>
                     <TableCell>
-                      <span className="font-medium">{en.user.name}</span>
+                      <Link href={`/admin/eleves/${en.user.id}`} className="font-medium hover:underline">{en.user.name}</Link>
                       <span className="block text-xs text-foreground-tertiary">{en.user.email}</span>
                     </TableCell>
                     <TableCell>

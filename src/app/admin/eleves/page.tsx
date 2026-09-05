@@ -1,0 +1,99 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { requireUser, hasPermission } from "@/lib/auth/session";
+import { canSupervise } from "@/lib/auth/ownership";
+import { listStudents } from "@/lib/queries/students";
+import { SESSION_STATUS } from "@/lib/labels";
+import { formatDate } from "@/lib/format";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/admin/page-header";
+import { StatusBadge } from "@/components/admin/status-badge";
+import { EmptyState } from "@/components/admin/empty-state";
+
+// Axe Élève (spec §10.1) : chaque élève mène à son dossier complet.
+export default async function StudentsPage({ searchParams }: PageProps<"/admin/eleves">) {
+  const me = await requireUser("/admin/eleves");
+  if (!hasPermission(me, "can_manage_sessions")) redirect("/admin");
+  const { q } = await searchParams;
+  const search = typeof q === "string" ? q : "";
+  const students = await listStudents(me, search);
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title="Élèves"
+        description={
+          canSupervise(me)
+            ? "Tous les élèves de la plateforme. Chaque dossier est autonome et complet, anciens élèves inclus."
+            : "Les élèves inscrits à tes sessions, anciens inclus. Un élève s'ajoute depuis la fiche d'une session."
+        }
+      />
+
+      <form method="get" className="flex max-w-md gap-2">
+        <Input name="q" defaultValue={search} placeholder="Rechercher par nom ou email" aria-label="Rechercher" />
+        <Button type="submit" variant="outline">Rechercher</Button>
+        {search ? (
+          <Button asChild variant="ghost">
+            <Link href="/admin/eleves">Effacer</Link>
+          </Button>
+        ) : null}
+      </form>
+
+      {students.length === 0 ? (
+        <EmptyState title={search ? `Aucun élève pour « ${search} »` : "Aucun élève"}>
+          {!search ? "Inscris un élève depuis la fiche d'une session." : null}
+        </EmptyState>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Élève</TableHead>
+              <TableHead>Dernière session</TableHead>
+              <TableHead className="text-right">En cours</TableHead>
+              <TableHead className="text-right">Terminées</TableHead>
+              <TableHead className="text-right">Abandons</TableHead>
+              <TableHead className="text-right">Documents</TableHead>
+              <TableHead className="text-right">Compte créé le</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {students.map((s) => {
+              const count = (st: "active" | "completed" | "dropped") => s.enrollments.filter((e) => e.status === st).length;
+              const last = s.enrollments[0]?.session;
+              const zero = <span className="text-foreground-tertiary">0</span>;
+              return (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <Link href={`/admin/eleves/${s.id}`} className="font-medium hover:underline">{s.name}</Link>
+                    <span className="block text-xs text-foreground-tertiary">{s.email}</span>
+                  </TableCell>
+                  <TableCell>
+                    {last ? (
+                      <>
+                        <Link href={`/admin/sessions/${last.id}`} className="hover:underline">{last.name}</Link>
+                        <span className="mt-0.5 flex items-center gap-2 text-xs text-foreground-tertiary">
+                          <StatusBadge tone={SESSION_STATUS[last.status].tone}>{SESSION_STATUS[last.status].label}</StatusBadge>
+                          {formatDate(last.startDate)} → {formatDate(last.endDate)}
+                          {s.enrollments.length > 1 ? ` · +${s.enrollments.length - 1} autre(s)` : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-foreground-tertiary">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">{count("active") ? <StatusBadge tone="blue">{count("active")}</StatusBadge> : zero}</TableCell>
+                  <TableCell className="text-right">{count("completed") ? <StatusBadge tone="green">{count("completed")}</StatusBadge> : zero}</TableCell>
+                  <TableCell className="text-right">{count("dropped") ? <StatusBadge tone="red">{count("dropped")}</StatusBadge> : zero}</TableCell>
+                  <TableCell className="text-right tabular-nums">{s._count.documentsOwned}</TableCell>
+                  <TableCell className="text-right text-foreground-secondary">{formatDate(s.createdAt)}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
