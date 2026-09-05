@@ -3,11 +3,13 @@ import { redirect } from "next/navigation";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { logout } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
+import { ADMIN_NAV } from "@/components/admin/nav";
 
-// Layout minimal du back-office. Sera enrichi (navigation, double vue) à l'étape 4.
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const user = await requireUser("/admin");
   if (!hasPermission(user, "can_access_backoffice")) redirect("/");
+
+  const items = ADMIN_NAV.filter((i) => !i.permission || hasPermission(user, i.permission));
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -16,11 +18,11 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           <Link href="/admin" className="font-medium">
             Back-office
           </Link>
-          {hasPermission(user, "can_manage_users") ? (
-            <Link href="/admin/utilisateurs" className="text-foreground-secondary hover:text-foreground">
-              Utilisateurs
+          {items.map((i) => (
+            <Link key={i.href} href={i.href} className="text-foreground-secondary hover:text-foreground">
+              {i.label}
             </Link>
-          ) : null}
+          ))}
         </nav>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-foreground-secondary">{user.name}</span>

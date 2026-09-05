@@ -14,6 +14,10 @@
 //   • Les rôles/permissions sont de la DONNÉE (Role.key, Permission.key), jamais des enums.
 //   • Tables et colonnes mappées en snake_case : les policies RLS (SQL) les lisent directement.
 //   • IDs en UUID. `User.id` = l'UUID de `auth.users` Supabase (pas de valeur par défaut).
+//   • Cloisonnement par propriétaire : `ownerId` sur Company, Prospect, Formation, Session.
+//     Un formateur ne voit que ses lignes ; `can_view_all_dossiers` voit tout.
+//   • `isDemo` sur le vécu (Session, Enrollment, Submission, ActivityLog) : données de
+//     démonstration estampillées, jamais mélangées aux vraies dans les exports.
 // ─────────────────────────────────────────────────────────────────────────────
 
 generator client {
@@ -167,7 +171,10 @@ model User {
 
   userRoles                UserRole[]
   accessLogs               AccessLog[]
+  companiesOwned           Company[]          @relation("CompanyOwner")
   prospectsOwned           Prospect[]         @relation("ProspectOwner")
+  formationsOwned          Formation[]        @relation("FormationOwner")
+  sessionsOwned            Session[]          @relation("SessionOwner")
   formationVersionsCreated FormationVersion[] @relation("FormationVersionCreator")
   sessionsTrained          Session[]          @relation("SessionTrainer")
   enrollments              Enrollment[]
@@ -257,6 +264,8 @@ model AccessLog {
 
 model Company {
   id           String    @id @default(uuid()) @db.Uuid
+  /// Propriétaire (cloisonnement par formateur). Seul lui, ou can_view_all_dossiers, la voit.
+  ownerId      String    @map("owner_id") @db.Uuid
   name         String
   siret        String?   @unique
   sector       String?
@@ -268,10 +277,13 @@ model Company {
   updatedAt    DateTime  @updatedAt @map("updated_at")
   archivedAt   DateTime? @map("archived_at")
 
+  owner User @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
   prospects Prospect[]
   sessions  Session[]
   documents Document[]
 
+  @@index([ownerId])
   @@map("companies")
 }
 
@@ -282,15 +294,17 @@ model Prospect {
   status      ProspectStatus @default(new)
   firstCallAt DateTime?      @map("first_call_at")
   notes       String?
-  ownerId     String?        @map("owner_id") @db.Uuid
+  /// Propriétaire (cloisonnement par formateur).
+  ownerId     String         @map("owner_id") @db.Uuid
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
   archivedAt  DateTime?      @map("archived_at")
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  owner   User?   @relation("ProspectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  owner   User    @relation("ProspectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   @@index([companyId])
+  @@index([ownerId])
   @@map("prospects")
 }
 
@@ -301,6 +315,8 @@ model Prospect {
 /// Identité stable (« Formation IA — BTP »). Le contenu vit dans les versions.
 model Formation {
   id          String    @id @default(uuid()) @db.Uuid
+  /// Propriétaire (cloisonnement par formateur).
+  ownerId     String    @map("owner_id") @db.Uuid
   name        String
   sector      String?
   description String?
@@ -308,9 +324,12 @@ model Formation {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
+  owner User @relation("FormationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
   versions  FormationVersion[]
   documents Document[]
 
+  @@index([ownerId])
   @@map("formations")
 }
 
@@ -431,6 +450,10 @@ model Exercise {
 /// Pointe vers une VERSION précise (piège n°3). Process figé dans `processSnapshot` (piège n°5).
 model Session {
   id                 String        @id @default(uuid()) @db.Uuid
+  /// Propriétaire (cloisonnement par formateur). Distinct de `trainerId` (qui anime).
+  ownerId            String        @map("owner_id") @db.Uuid
+  /// Données de démonstration : jamais confondues avec du vécu réel (exports estampillés).
+  isDemo             Boolean       @default(false) @map("is_demo")
   formationVersionId String        @map("formation_version_id") @db.Uuid
   companyId          String?       @map("company_id") @db.Uuid
   name               String
@@ -443,6 +466,7 @@ model Session {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
+  owner            User             @relation("SessionOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   formationVersion FormationVersion @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
   company          Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   trainer          User?            @relation("SessionTrainer", fields: [trainerId], references: [id], onDelete: Restrict)
@@ -456,6 +480,7 @@ model Session {
   activityLogs   ActivityLog[]
   timeAggregates TimeAggregate[]
 
+  @@index([ownerId])
   @@index([formationVersionId])
   @@index([companyId])
   @@index([trainerId])
@@ -469,6 +494,7 @@ model Enrollment {
   sessionId   String           @map("session_id") @db.Uuid
   userId      String           @map("user_id") @db.Uuid
   status      EnrollmentStatus @default(active)
+  isDemo      Boolean          @default(false) @map("is_demo")
   enrolledAt  DateTime         @default(now()) @map("enrolled_at")
   completedAt DateTime?        @map("completed_at")
 
@@ -687,6 +713,7 @@ model Submission {
   /// Retour individuel du formateur (Markdown).
   feedback    String?
   status      SubmissionStatus @default(submitted)
+  isDemo      Boolean          @default(false) @map("is_demo")
   submittedAt DateTime         @default(now()) @map("submitted_at")
   gradedAt    DateTime?        @map("graded_at")
   gradedById  String?          @map("graded_by") @db.Uuid
@@ -716,6 +743,7 @@ model ActivityLog {
   exerciseId      String?           @map("exercise_id") @db.Uuid
   documentId      String?           @map("document_id") @db.Uuid
   eventType       ActivityEventType @map("event_type")
+  isDemo          Boolean           @default(false) @map("is_demo")
   at              DateTime          @default(now())
   durationSeconds Int?              @map("duration_seconds")
 

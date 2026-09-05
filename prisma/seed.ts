@@ -71,10 +71,11 @@ async function main() {
   }
 
   // Le trigger crée la ligne public.users ; on la garantit quand même (idempotence).
+  // Ne jamais écraser le nom d'un compte existant (modifiable dans l'app).
   await prisma.user.upsert({
     where: { id: authUserId },
     create: { id: authUserId, email, name },
-    update: { name },
+    update: {},
   });
 
   const superAdmin = await prisma.role.findUniqueOrThrow({ where: { key: "super_admin" } });
