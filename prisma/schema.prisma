@@ -1,0 +1,752 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Plateforme de formation — schéma Prisma (spec §5)
+//
+// Principe directeur : « vécu » = immuable, « modèle » = versionné.
+//   • Modèle (versionné)  : Formation → FormationVersion → Module/Lesson/ContentBlock/
+//                            Exercise, ProcessTemplate/StepTemplate, MessageTemplate.
+//   • Vécu (gelé)         : Session, Enrollment, StepInstance, Document, Attendance,
+//                            Conversation/Message, Submission, ActivityLog, TimeAggregate.
+//
+// Règles transverses :
+//   • Aucune suppression physique : soft-delete via `archivedAt` sur les entités modèle,
+//     statuts (cancelled / dropped) sur le vécu.
+//   • Toutes les relations sont en `onDelete: Restrict` → aucune cascade possible.
+//   • Les rôles/permissions sont de la DONNÉE (Role.key, Permission.key), jamais des enums.
+//   • Tables et colonnes mappées en snake_case : les policies RLS (SQL) les lisent directement.
+//   • IDs en UUID. `User.id` = l'UUID de `auth.users` Supabase (pas de valeur par défaut).
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ENUMS — uniquement pour les champs à valeurs réellement fixes.
+// (Les rôles et permissions ne sont PAS des enums : piège n°1.)
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum ProspectStatus {
+  new
+  contacted
+  qualified
+  won
+  lost
+}
+
+enum FormationVersionStatus {
+  draft
+  active
+  archived
+}
+
+enum ContentBlockType {
+  text
+  image
+  video
+  pdf
+  embed
+  callout
+  quiz_ref
+  exercise_ref
+}
+
+enum ExerciseType {
+  qcm
+  true_false
+  short_answer
+  long_text
+  file_upload
+  quiz
+}
+
+enum CorrectionMode {
+  auto
+  manual
+}
+
+enum SessionStatus {
+  planned
+  running
+  done
+  cancelled
+}
+
+enum EnrollmentStatus {
+  active
+  completed
+  dropped
+}
+
+enum TriggerType {
+  manual
+  time_offset
+  event
+}
+
+enum TriggerAnchor {
+  start_date
+  end_date
+  signature
+  enrollment
+  opco_agreement
+}
+
+enum ActionType {
+  send_message
+  request_signature
+  unlock_content
+  create_visio
+  checklist_only
+}
+
+enum StepInstanceStatus {
+  pending
+  done
+  skipped
+}
+
+enum DocumentType {
+  contrat
+  convention
+  convocation
+  emargement
+  attestation
+  eval
+  facture
+  autre
+}
+
+enum SignatureStatus {
+  na
+  pending
+  signed
+}
+
+enum AttendanceSlot {
+  am
+  pm
+}
+
+enum SubmissionStatus {
+  submitted
+  graded
+}
+
+enum ActivityEventType {
+  lesson_open
+  lesson_close
+  exercise_start
+  exercise_submit
+  doc_open
+  heartbeat
+}
+
+enum TimeScopeType {
+  session
+  module
+  lesson
+  exercise
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.1 IDENTITÉ & RÔLES
+// ═════════════════════════════════════════════════════════════════════════════
+
+model User {
+  /// Même UUID que `auth.users.id` (Supabase Auth). Fourni explicitement à la création.
+  id         String    @id @db.Uuid
+  email      String    @unique
+  name       String
+  createdAt  DateTime  @default(now()) @map("created_at")
+  archivedAt DateTime? @map("archived_at")
+
+  userRoles                UserRole[]
+  accessLogs               AccessLog[]
+  prospectsOwned           Prospect[]         @relation("ProspectOwner")
+  formationVersionsCreated FormationVersion[] @relation("FormationVersionCreator")
+  sessionsTrained          Session[]          @relation("SessionTrainer")
+  enrollments              Enrollment[]
+  stepTemplatesAssigned    StepTemplate[]     @relation("StepTemplateAssigneeUser")
+  stepInstancesDone        StepInstance[]     @relation("StepInstanceDoneBy")
+  documentsOwned           Document[]         @relation("DocumentOwner")
+  attendances              Attendance[]
+  conversations            Conversation[]
+  messagesSent             Message[]          @relation("MessageSender")
+  submissions              Submission[]       @relation("SubmissionAuthor")
+  submissionsGraded        Submission[]       @relation("SubmissionGrader")
+  activityLogs             ActivityLog[]
+  timeAggregates           TimeAggregate[]
+
+  @@map("users")
+}
+
+/// Donnée, pas enum : super_admin, formateur, eleve… (piège n°1)
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  label     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  rolePermissions       RolePermission[]
+  userRoles             UserRole[]
+  stepTemplatesAssigned StepTemplate[]   @relation("StepTemplateAssigneeRole")
+
+  @@map("roles")
+}
+
+/// can_grant_admin, can_edit_process_template, can_edit_formation, can_correct_exercises,
+/// can_view_all_dossiers, can_export_dossier, can_manage_users, can_manage_visio…
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+/// Journal d'accès (audit RGPD) : qui a ouvert / exporté quoi, quand. Immuable.
+model AccessLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id") @db.Uuid
+  at         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, at])
+  @@index([targetType, targetId])
+  @@map("access_logs")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.2 CRM / COMMERCIAL
+// ═════════════════════════════════════════════════════════════════════════════
+
+model Company {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  siret        String?   @unique
+  sector       String?
+  contactName  String?   @map("contact_name")
+  contactEmail String?   @map("contact_email")
+  contactPhone String?   @map("contact_phone")
+  address      String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  archivedAt   DateTime? @map("archived_at")
+
+  prospects Prospect[]
+  sessions  Session[]
+  documents Document[]
+
+  @@map("companies")
+}
+
+/// Phase 0 du process.
+model Prospect {
+  id          String         @id @default(uuid()) @db.Uuid
+  companyId   String         @map("company_id") @db.Uuid
+  status      ProspectStatus @default(new)
+  firstCallAt DateTime?      @map("first_call_at")
+  notes       String?
+  ownerId     String?        @map("owner_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  archivedAt  DateTime?      @map("archived_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  owner   User?   @relation("ProspectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
+  @@map("prospects")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.3 FORMATION & VERSIONING (cœur)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Identité stable (« Formation IA — BTP »). Le contenu vit dans les versions.
+model Formation {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  sector      String?
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  versions  FormationVersion[]
+  documents Document[]
+
+  @@map("formations")
+}
+
+/// Contenu + process figés à l'instant T. Jamais modifiée une fois `active`.
+model FormationVersion {
+  id            String                 @id @default(uuid()) @db.Uuid
+  formationId   String                 @map("formation_id") @db.Uuid
+  versionNumber Int                    @map("version_number")
+  status        FormationVersionStatus @default(draft)
+  /// Résumé des modifs vs version précédente (« v2 : ajout module RGPD »).
+  changelog     String?
+  publishedAt   DateTime?              @map("published_at")
+  createdById   String?                @map("created_by") @db.Uuid
+  createdAt     DateTime               @default(now()) @map("created_at")
+
+  formation Formation @relation(fields: [formationId], references: [id], onDelete: Restrict)
+  createdBy User?     @relation("FormationVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  modules          Module[]
+  sessions         Session[]
+  processTemplates ProcessTemplate[]
+  messageTemplates MessageTemplate[]
+
+  @@unique([formationId, versionNumber])
+  @@index([formationId, status])
+  @@map("formation_versions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.4 CONTENU PÉDAGOGIQUE (arbre de blocs)
+// ═════════════════════════════════════════════════════════════════════════════
+
+model Module {
+  id                 String   @id @default(uuid()) @db.Uuid
+  formationVersionId String   @map("formation_version_id") @db.Uuid
+  order              Int
+  title              String
+  description        String?
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  formationVersion FormationVersion @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
+
+  lessons      Lesson[]
+  exercises    Exercise[]
+  activityLogs ActivityLog[]
+
+  @@unique([formationVersionId, order])
+  @@map("modules")
+}
+
+model Lesson {
+  id        String   @id @default(uuid()) @db.Uuid
+  moduleId  String   @map("module_id") @db.Uuid
+  order     Int
+  title     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+
+  contentBlocks ContentBlock[]
+  exercises     Exercise[]
+  activityLogs  ActivityLog[]
+
+  @@unique([moduleId, order])
+  @@map("lessons")
+}
+
+/// Une leçon = une pile de blocs réordonnables (modèle Notion).
+model ContentBlock {
+  id        String           @id @default(uuid()) @db.Uuid
+  lessonId  String           @map("lesson_id") @db.Uuid
+  order     Int
+  type      ContentBlockType
+  payload   Json             @map("payload_json")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+
+  @@unique([lessonId, order])
+  @@map("content_blocks")
+}
+
+/// Rattaché à un module OU à une leçon (exactement l'un des deux, garanti côté applicatif).
+model Exercise {
+  id             String         @id @default(uuid()) @db.Uuid
+  moduleId       String?        @map("module_id") @db.Uuid
+  lessonId       String?        @map("lesson_id") @db.Uuid
+  order          Int
+  type           ExerciseType
+  title          String
+  /// Énoncé en Markdown.
+  statement      String
+  /// Options, bonne réponse, mots-clés… selon le `type`.
+  config         Json           @map("config_json")
+  maxScore       Int?           @map("max_score")
+  correctionMode CorrectionMode @map("correction_mode")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  module Module? @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  lesson Lesson? @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+
+  submissions  Submission[]
+  activityLogs ActivityLog[]
+
+  @@index([moduleId])
+  @@index([lessonId])
+  @@map("exercises")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.5 SESSION (instance vécue — immuable)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Pointe vers une VERSION précise (piège n°3). Process figé dans `processSnapshot` (piège n°5).
+model Session {
+  id                 String        @id @default(uuid()) @db.Uuid
+  formationVersionId String        @map("formation_version_id") @db.Uuid
+  companyId          String?       @map("company_id") @db.Uuid
+  name               String
+  startDate          DateTime      @map("start_date") @db.Date
+  endDate            DateTime      @map("end_date") @db.Date
+  status             SessionStatus @default(planned)
+  /// Process (7 phases + mails) figé au démarrage de la session.
+  processSnapshot    Json?         @map("process_snapshot_json")
+  trainerId          String?       @map("trainer_id") @db.Uuid
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  formationVersion FormationVersion @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
+  company          Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  trainer          User?            @relation("SessionTrainer", fields: [trainerId], references: [id], onDelete: Restrict)
+
+  enrollments    Enrollment[]
+  stepInstances  StepInstance[]
+  documents      Document[]
+  attendances    Attendance[]
+  conversations  Conversation[]
+  submissions    Submission[]
+  activityLogs   ActivityLog[]
+  timeAggregates TimeAggregate[]
+
+  @@index([formationVersionId])
+  @@index([companyId])
+  @@index([trainerId])
+  @@index([status, startDate])
+  @@map("sessions")
+}
+
+/// Jamais supprimé : `dropped` si abandon.
+model Enrollment {
+  id          String           @id @default(uuid()) @db.Uuid
+  sessionId   String           @map("session_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  status      EnrollmentStatus @default(active)
+  enrolledAt  DateTime         @default(now()) @map("enrolled_at")
+  completedAt DateTime?        @map("completed_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@map("enrollments")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.6 MOTEUR DE PROCESS CONFIGURABLE (modèle, éditable sans code)
+// ═════════════════════════════════════════════════════════════════════════════
+
+model ProcessTemplate {
+  id                 String    @id @default(uuid()) @db.Uuid
+  formationVersionId String    @map("formation_version_id") @db.Uuid
+  name               String
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  archivedAt         DateTime? @map("archived_at")
+
+  formationVersion FormationVersion @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
+
+  steps StepTemplate[]
+
+  @@index([formationVersionId])
+  @@map("process_templates")
+}
+
+model StepTemplate {
+  id                String         @id @default(uuid()) @db.Uuid
+  processTemplateId String         @map("process_template_id") @db.Uuid
+  order             Int
+  /// Phase 0 (prospect) à 6.
+  phase             Int
+  name              String
+  description       String?
+  /// Assigné : une personne précise OU un rôle (l'un des deux, ou aucun).
+  assigneeUserId    String?        @map("assignee_user_id") @db.Uuid
+  assigneeRoleId    String?        @map("assignee_role_id") @db.Uuid
+  triggerType       TriggerType    @map("trigger_type")
+  triggerAnchor     TriggerAnchor? @map("trigger_anchor")
+  /// Ex. -7 (J-7), +90 (J+90).
+  triggerOffsetDays Int?           @map("trigger_offset_days")
+  actionType        ActionType     @map("action_type")
+  /// Paramètres de l'action (id de MessageTemplate, module à débloquer, type de doc…).
+  actionParams      Json?          @map("action_params_json")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  processTemplate ProcessTemplate @relation(fields: [processTemplateId], references: [id], onDelete: Restrict)
+  assigneeUser    User?           @relation("StepTemplateAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  assigneeRole    Role?           @relation("StepTemplateAssigneeRole", fields: [assigneeRoleId], references: [id], onDelete: Restrict)
+
+  instances StepInstance[]
+
+  @@unique([processTemplateId, order])
+  @@map("step_templates")
+}
+
+/// La checklist RÉELLE d'une session (vécu).
+model StepInstance {
+  id             String             @id @default(uuid()) @db.Uuid
+  sessionId      String             @map("session_id") @db.Uuid
+  stepTemplateId String             @map("step_template_id") @db.Uuid
+  status         StepInstanceStatus @default(pending)
+  dueDate        DateTime?          @map("due_date") @db.Date
+  doneAt         DateTime?          @map("done_at")
+  doneById       String?            @map("done_by") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at")
+
+  session      Session      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  stepTemplate StepTemplate @relation(fields: [stepTemplateId], references: [id], onDelete: Restrict)
+  doneBy       User?        @relation("StepInstanceDoneBy", fields: [doneById], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, stepTemplateId])
+  @@index([status, dueDate])
+  @@map("step_instances")
+}
+
+model MessageTemplate {
+  id                 String    @id @default(uuid()) @db.Uuid
+  formationVersionId String    @map("formation_version_id") @db.Uuid
+  name               String
+  subject            String
+  /// Corps en Markdown, avec variables ({{prenom}}, {{date_debut}}…).
+  body               String
+  attachments        Json?     @map("attachments_json")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  archivedAt         DateTime? @map("archived_at")
+
+  formationVersion FormationVersion @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
+
+  @@index([formationVersionId])
+  @@map("message_templates")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.7 DOCUMENTS / GED & SIGNATURE (vécu, autonome)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Autonome : survit à l'archivage de la formation. Toutes les FK sont optionnelles + Restrict.
+model Document {
+  id                  String          @id @default(uuid()) @db.Uuid
+  /// L'élève propriétaire, ou null si document entreprise.
+  ownerUserId         String?         @map("owner_user_id") @db.Uuid
+  companyId           String?         @map("company_id") @db.Uuid
+  sessionId           String?         @map("session_id") @db.Uuid
+  formationId         String?         @map("formation_id") @db.Uuid
+  type                DocumentType
+  /// Phase du process à laquelle le doc est rattaché (0–6).
+  phase               Int?
+  title               String
+  /// Chemin dans Supabase Storage (bucket privé, URLs signées).
+  storagePath         String          @map("storage_path")
+  mimeType            String?         @map("mime_type")
+  sizeBytes           Int?            @map("size_bytes")
+  signatureStatus     SignatureStatus @default(na) @map("signature_status")
+  /// Identifiant de la demande Yousign.
+  signatureProviderId String?         @map("signature_provider_id")
+  signedAt            DateTime?       @map("signed_at")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  /// Date de purge RGPD.
+  retentionUntil      DateTime?       @map("retention_until") @db.Date
+
+  owner     User?      @relation("DocumentOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  session   Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  formation Formation? @relation(fields: [formationId], references: [id], onDelete: Restrict)
+
+  attendances  Attendance[]
+  activityLogs ActivityLog[]
+
+  @@index([ownerUserId])
+  @@index([sessionId])
+  @@index([companyId])
+  @@index([retentionUntil])
+  @@map("documents")
+}
+
+/// 18 émargements = 9 jours × 2 demi-journées. Immuable une fois signé.
+model Attendance {
+  id         String         @id @default(uuid()) @db.Uuid
+  sessionId  String         @map("session_id") @db.Uuid
+  userId     String         @map("user_id") @db.Uuid
+  day        DateTime       @db.Date
+  slot       AttendanceSlot
+  signedAt   DateTime?      @map("signed_at")
+  documentId String?        @map("document_id") @db.Uuid
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  session  Session   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, userId, day, slot])
+  @@index([userId])
+  @@map("attendances")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.8 MESSAGERIE
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// 1 fil par élève × session.
+model Conversation {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  messages Message[]
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  /// Null si envoyé par le moteur de process.
+  senderId       String?  @map("sender_id") @db.Uuid
+  /// Corps en Markdown.
+  body           String
+  attachments    Json?    @map("attachments_json")
+  sentAt         DateTime @default(now()) @map("sent_at")
+  autoGenerated  Boolean  @default(false) @map("auto_generated")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+  sender       User?        @relation("MessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, sentAt])
+  @@map("messages")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.9 EXERCICES — SOUMISSIONS & CORRECTION (vécu)
+// ═════════════════════════════════════════════════════════════════════════════
+
+model Submission {
+  id          String           @id @default(uuid()) @db.Uuid
+  exerciseId  String           @map("exercise_id") @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  sessionId   String           @map("session_id") @db.Uuid
+  /// Réponses / référence du fichier uploadé.
+  content     Json             @map("content_json")
+  autoScore   Decimal?         @map("auto_score") @db.Decimal(6, 2)
+  manualScore Decimal?         @map("manual_score") @db.Decimal(6, 2)
+  /// Retour individuel du formateur (Markdown).
+  feedback    String?
+  status      SubmissionStatus @default(submitted)
+  submittedAt DateTime         @default(now()) @map("submitted_at")
+  gradedAt    DateTime?        @map("graded_at")
+  gradedById  String?          @map("graded_by") @db.Uuid
+
+  exercise Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  user     User     @relation("SubmissionAuthor", fields: [userId], references: [id], onDelete: Restrict)
+  session  Session  @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  gradedBy User?    @relation("SubmissionGrader", fields: [gradedById], references: [id], onDelete: Restrict)
+
+  @@index([userId, sessionId])
+  @@index([exerciseId])
+  @@index([status])
+  @@map("submissions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// §5.10 LOGS DE TEMPS PASSÉ (preuve FOAD)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Événement brut (heartbeat toutes les ~30 s, ouverture/fermeture…). Immuable, volumineux.
+model ActivityLog {
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @map("user_id") @db.Uuid
+  sessionId       String            @map("session_id") @db.Uuid
+  moduleId        String?           @map("module_id") @db.Uuid
+  lessonId        String?           @map("lesson_id") @db.Uuid
+  exerciseId      String?           @map("exercise_id") @db.Uuid
+  documentId      String?           @map("document_id") @db.Uuid
+  eventType       ActivityEventType @map("event_type")
+  at              DateTime          @default(now())
+  durationSeconds Int?              @map("duration_seconds")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session  Session   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  module   Module?   @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  lesson   Lesson?   @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  exercise Exercise? @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([userId, sessionId, at])
+  @@index([sessionId, at])
+  @@map("activity_logs")
+}
+
+/// Pré-calcul quotidien pour les relevés d'assiduité. `scopeId` = id du module/leçon/exo,
+/// ou id de la session quand `scopeType = session`.
+model TimeAggregate {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  sessionId    String        @map("session_id") @db.Uuid
+  scopeType    TimeScopeType @map("scope_type")
+  scopeId      String        @map("scope_id") @db.Uuid
+  day          DateTime      @db.Date
+  totalSeconds Int           @map("total_seconds")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, sessionId, scopeType, scopeId, day])
+  @@index([sessionId, day])
+  @@map("time_aggregates")
+}
