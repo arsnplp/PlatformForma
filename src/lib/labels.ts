@@ -34,3 +34,48 @@ export const ENROLLMENT_STATUS: Record<EnrollmentStatus, { label: string; tone: 
   completed: { label: "Terminé", tone: "green" },
   dropped: { label: "Abandon", tone: "red" },
 };
+
+import type { TriggerType, TriggerAnchor, ActionType, StepInstanceStatus } from "@/generated/prisma/enums";
+
+// Phases du process (spec §6). L'index est stocké en base (StepTemplate.phase).
+export const PHASES: { n: number; label: string; hint: string }[] = [
+  { n: 0, label: "Prospection", hint: "Premier contact, fiche prospect" },
+  { n: 1, label: "Proposition", hint: "Catalogue, programme, devis" },
+  { n: 2, label: "Contractualisation", hint: "Contrat, OPCO, dates" },
+  { n: 3, label: "Préparation", hint: "Convocation, accès, test connexion" },
+  { n: 4, label: "Formation", hint: "Émargements, exercices, points d'étape" },
+  { n: 5, label: "Clôture", hint: "Attestations, bilans, facturation" },
+  { n: 6, label: "Relances", hint: "Bilans non reçus" },
+  { n: 7, label: "Suivi long terme", hint: "Synthèse, paiement OPCO, enquête à froid" },
+];
+export const PHASE_NUMBERS = PHASES.map((p) => p.n);
+export const phaseLabel = (n: number) => PHASES.find((p) => p.n === n)?.label ?? `Phase ${n}`;
+
+export const TRIGGER_TYPE: Record<TriggerType, { label: string; hint: string }> = {
+  manual: { label: "Manuel", hint: "Coché à la main dans la checklist" },
+  time_offset: { label: "Échéance", hint: "Date calculée : ancre ± décalage en jours" },
+  event: { label: "Événement", hint: "Déclenché quand l'événement survient" },
+};
+
+export const TRIGGER_ANCHOR: Record<TriggerAnchor, string> = {
+  start_date: "Début de session",
+  end_date: "Fin de session",
+  signature: "Signature du contrat",
+  enrollment: "Inscription de l'élève",
+  opco_agreement: "Accord OPCO reçu",
+};
+
+// Actions : seule checklist_only est active au palier 2 ; les autres arrivent aux paliers 3, 5, 6.
+export const ACTION_TYPE: Record<ActionType, { label: string; availableFrom?: number }> = {
+  checklist_only: { label: "Case à cocher" },
+  send_message: { label: "Envoyer un message", availableFrom: 3 },
+  request_signature: { label: "Demander une signature", availableFrom: 5 },
+  unlock_content: { label: "Débloquer du contenu", availableFrom: 4 },
+  create_visio: { label: "Créer une visio", availableFrom: 6 },
+};
+
+export const STEP_STATUS: Record<StepInstanceStatus, { label: string; tone: StatusTone }> = {
+  pending: { label: "À faire", tone: "gray" },
+  done: { label: "Fait", tone: "green" },
+  skipped: { label: "Passée", tone: "purple" },
+};

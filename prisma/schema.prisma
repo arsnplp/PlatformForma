@@ -530,7 +530,7 @@ model StepTemplate {
   id                String         @id @default(uuid()) @db.Uuid
   processTemplateId String         @map("process_template_id") @db.Uuid
   order             Int
-  /// Phase 0 (prospect) à 6.
+  /// Phase 0 (prospection) à 7 (suivi long terme).
   phase             Int
   name              String
   description       String?
@@ -608,7 +608,7 @@ model Document {
   sessionId           String?         @map("session_id") @db.Uuid
   formationId         String?         @map("formation_id") @db.Uuid
   type                DocumentType
-  /// Phase du process à laquelle le doc est rattaché (0–6).
+  /// Phase du process à laquelle le doc est rattaché (0–7).
   phase               Int?
   title               String
   /// Chemin dans Supabase Storage (bucket privé, URLs signées).

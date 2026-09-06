@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/auth/session";
 import { assertOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { copyVersionContent } from "@/lib/formations/copy";
+import { seedDefaultProcess } from "./process";
 import { parseForm, emptyToNull, type FormState } from "./shared";
 
 const formationSchema = z.object({
@@ -45,14 +46,17 @@ export async function createFormation(_prev: FormState, formData: FormData): Pro
   const parsed = parseForm(formationSchema, formData);
   if (!parsed.ok) return parsed.state;
 
-  // Une formation naît avec une v1 en brouillon (spec §8.3 : mode brouillon).
+  // Une formation naît avec une v1 en brouillon (spec §8.3 : mode brouillon),
+  // pré-remplie avec le process standard (modifiable étape par étape).
   const formation = await prisma.formation.create({
     data: {
       ...parsed.data,
       ownerId: me.id,
       versions: { create: { versionNumber: 1, status: "draft", createdById: me.id, changelog: "Version initiale" } },
     },
+    include: { versions: true },
   });
+  await seedDefaultProcess(formation.versions[0].id, me.id);
   revalidate();
   redirect(`/admin/formations/${formation.id}`);
 }

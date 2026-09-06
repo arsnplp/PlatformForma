@@ -25,10 +25,12 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { NewVersionForm } from "@/components/formations/new-version-form";
+import { ProcessSection } from "@/components/formations/process-section";
 
 export default async function FormationPage({ params, searchParams }: PageProps<"/admin/formations/[id]">) {
   const { id } = await params;
-  const { v } = await searchParams;
+  const { v, tab } = await searchParams;
+  const activeTab = tab === "process" ? "process" : "content";
   const me = await requireUser(`/admin/formations/${id}`);
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
 
@@ -50,7 +52,8 @@ export default async function FormationPage({ params, searchParams }: PageProps<
               enrollments: { include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { enrolledAt: "asc" } },
             },
           },
-          _count: { select: { processTemplates: true, messageTemplates: true } },
+          _count: { select: { messageTemplates: true } },
+          processTemplates: { where: { archivedAt: null }, select: { _count: { select: { steps: true } } } },
         },
       },
     },
@@ -157,7 +160,8 @@ export default async function FormationPage({ params, searchParams }: PageProps<
               </p>
               <p className="mt-1 text-xs text-foreground-tertiary">
                 {current.modules.length} module(s) · {current.modules.reduce((n, m) => n + m.lessons.length, 0)} leçon(s) ·{" "}
-                {current._count.processTemplates} process · {current._count.messageTemplates} template(s) de mail · {current.sessions.length} session(s)
+                {current.processTemplates.reduce((n, p) => n + p._count.steps, 0)} étape(s) de process · {current._count.messageTemplates} template(s) de mail ·{" "}
+                {current.sessions.length} session(s)
               </p>
             </div>
             {canEditContent ? (
@@ -177,6 +181,27 @@ export default async function FormationPage({ params, searchParams }: PageProps<
             ) : null}
           </div>
 
+          <div className="flex gap-1 border-b px-5 pt-3">
+            {[
+              { key: "content", label: "Contenu" },
+              { key: "process", label: "Process" },
+            ].map((t) => (
+              <Link
+                key={t.key}
+                href={`/admin/formations/${formation.id}?v=${current.versionNumber}&tab=${t.key}`}
+                className={cn(
+                  "-mb-px border-b-2 px-3 py-2 text-sm transition-colors",
+                  activeTab === t.key ? "border-foreground font-medium" : "border-transparent text-foreground-secondary hover:text-foreground",
+                )}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </div>
+
+          {activeTab === "process" ? (
+            <ProcessSection formationId={formation.id} versionId={current.id} versionNumber={current.versionNumber} editable={canEditContent && hasPermission(me, "can_edit_process_template")} />
+          ) : (
           <div className="space-y-4 px-5 py-4">
             {!canEditContent ? (
               <p className="text-sm text-foreground-tertiary">
@@ -236,6 +261,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
               </form>
             ) : null}
           </div>
+          )}
         </div>
 
         {!isArchived && latest.status !== "draft" ? (
