@@ -26,11 +26,12 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { NewVersionForm } from "@/components/formations/new-version-form";
 import { ProcessSection } from "@/components/formations/process-section";
+import { MailsSection } from "@/components/formations/mails-section";
 
 export default async function FormationPage({ params, searchParams }: PageProps<"/admin/formations/[id]">) {
   const { id } = await params;
   const { v, tab } = await searchParams;
-  const activeTab = tab === "process" ? "process" : "content";
+  const activeTab = tab === "process" ? "process" : tab === "mails" ? "mails" : "content";
   const me = await requireUser(`/admin/formations/${id}`);
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
 
@@ -185,6 +186,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
             {[
               { key: "content", label: "Contenu" },
               { key: "process", label: "Process" },
+              { key: "mails", label: "Mails" },
             ].map((t) => (
               <Link
                 key={t.key}
@@ -201,6 +203,8 @@ export default async function FormationPage({ params, searchParams }: PageProps<
 
           {activeTab === "process" ? (
             <ProcessSection me={me} formationId={formation.id} versionId={current.id} versionNumber={current.versionNumber} editable={canEditContent && hasPermission(me, "can_edit_process_template")} />
+          ) : activeTab === "mails" ? (
+            <MailsSection formationId={formation.id} versionId={current.id} versionNumber={current.versionNumber} editable={canEditContent && hasPermission(me, "can_edit_process_template")} />
           ) : (
           <div className="space-y-4 px-5 py-4">
             {!canEditContent ? (

@@ -16,6 +16,7 @@ const sessionSchema = z
     formationVersionId: z.string().uuid("Choisis une formation et une version"),
     companyId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
     trainerId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
+    durationHours: z.preprocess(emptyToNull, z.coerce.number().int().min(1, "Au moins 1 heure").max(2000, "Durée irréaliste").nullable()),
     startDate: z.coerce.date({ message: "Date de début invalide" }),
     endDate: z.coerce.date({ message: "Date de fin invalide" }),
     status: z.nativeEnum(SessionStatus).default("planned"),

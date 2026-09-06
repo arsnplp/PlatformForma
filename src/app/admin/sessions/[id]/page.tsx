@@ -59,6 +59,7 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
     ["Entreprise", session.company ? <Link key="c" href={`/admin/entreprises/${session.company.id}`} className="hover:underline">{session.company.name}</Link> : "—"],
     ["Formateur", session.trainer?.name ?? "—"],
     ["Dates", `${formatDate(session.startDate)} → ${formatDate(session.endDate)}`],
+    ["Durée", session.durationHours ? `${session.durationHours} heures` : <span key="d" className="text-status-orange">À renseigner (mention Qualiopi)</span>],
     ["Process", frozenAt ? `Figé le ${formatDateTime(frozenAt)}` : "Suit le modèle jusqu'au démarrage"],
   ];
   if (canSupervise(me)) info.push(["Propriétaire", session.owner.name]);

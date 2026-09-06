@@ -25,6 +25,7 @@ export type SessionFormValues = {
   trainerId: string | null;
   startDate: string; // yyyy-mm-dd
   endDate: string;
+  durationHours: string;
   status: SessionStatus;
 };
 
@@ -132,12 +133,18 @@ export function SessionForm({
         </FormField>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2">
         <FormField id="startDate" label="Début" errors={e.startDate}>
           <Input id="startDate" name="startDate" type="date" defaultValue={v("startDate")} required />
         </FormField>
         <FormField id="endDate" label="Fin" errors={e.endDate}>
           <Input id="endDate" name="endDate" type="date" defaultValue={v("endDate")} required />
+        </FormField>
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        <FormField id="durationHours" label="Durée totale (heures)" hint="Mention obligatoire sur la convocation et l'attestation." errors={e.durationHours}>
+          <Input id="durationHours" name="durationHours" type="number" min={1} max={2000} defaultValue={v("durationHours")} placeholder="63" />
         </FormField>
         <FormField id="status" label="Statut" errors={e.status}>
           <NativeSelect id="status" name="status" defaultValue={v("status") || "planned"}>

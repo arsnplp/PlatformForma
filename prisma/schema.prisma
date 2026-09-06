@@ -459,6 +459,8 @@ model Session {
   name               String
   startDate          DateTime      @map("start_date") @db.Date
   endDate            DateTime      @map("end_date") @db.Date
+  /// Durée totale en heures — mention obligatoire Qualiopi (convocation, attestation).
+  durationHours      Int?          @map("duration_hours")
   status             SessionStatus @default(planned)
   /// Process (7 phases + mails) figé au démarrage de la session.
   processSnapshot    Json?         @map("process_snapshot_json")

@@ -46,6 +46,7 @@ export default async function EditSessionPage({ params }: PageProps<"/admin/sess
           trainerId: session.trainerId,
           startDate: toInputDate(session.startDate),
           endDate: toInputDate(session.endDate),
+          durationHours: session.durationHours == null ? "" : String(session.durationHours),
           status: session.status,
         }}
         cancelHref={`/admin/sessions/${id}`}
