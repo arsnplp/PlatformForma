@@ -50,4 +50,5 @@ Ce principe gouverne le versioning, le soft-delete et la conformité audit (Qual
 - Next.js 16 (App Router, TypeScript, `src/`), Tailwind v4, Prisma 7 (`prisma.config.ts` porte l'URL CLI, le client est généré dans `src/generated/prisma`), Supabase (Postgres, Auth, Storage, RLS).
 - `DATABASE_URL` = pooler port 6543 (`?pgbouncer=true`), utilisée par le PrismaClient au runtime (driver adapter) ; `DIRECT_URL` = port 5432, utilisée par la CLI Prisma (migrations) via `prisma.config.ts`. Prisma 7 n'a plus de `directUrl` : c'est cette séparation qui en tient lieu.
 - Enums Prisma pour tous les champs à valeurs fixes. Toutes les relations en `onDelete: Restrict`.
+- **Fuseau horaire des échéances** : `Session.startDate/endDate` et `StepInstance.dueDate` sont des dates civiles (`@db.Date`) manipulées en UTC (`setUTCDate`). Au Palier 3, le cron qui déclenchera les envois automatiques DOIT raisonner en heure de Paris (`Europe/Paris`) pour comparer « aujourd'hui » à ces dates, sinon une convocation J-7 partirait la veille au soir.
 - Ne jamais committer `.env` ni aucun secret (`.gitignore` couvre `.env` et `.env*`, seul `.env.example` est versionné).

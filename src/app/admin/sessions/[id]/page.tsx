@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { isOwnerOrSupervisor, canSupervise } from "@/lib/auth/ownership";
-import { cancelSession } from "@/lib/actions/sessions";
+import { cancelSession, startSession } from "@/lib/actions/sessions";
 import { enrollStudent, setEnrollmentStatus } from "@/lib/actions/enrollments";
 import { listMyStudents } from "@/lib/queries/users";
 import { SESSION_STATUS, ENROLLMENT_STATUS } from "@/lib/labels";
@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { EnrollForm } from "@/components/sessions/enroll-form";
+import { ChecklistSection } from "@/components/sessions/checklist-section";
 
 export default async function SessionPage({ params }: PageProps<"/admin/sessions/[id]">) {
   const { id } = await params;
@@ -42,6 +43,8 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
   const st = SESSION_STATUS[session.status];
   const fv = session.formationVersion;
   const enrolledIds = new Set(session.enrollments.map((e) => e.userId));
+  const snapshot = session.processSnapshot as { frozenAt?: string } | null;
+  const frozenAt = snapshot?.frozenAt ?? null;
   const candidates = students.filter((s) => !enrolledIds.has(s.id));
 
   const info: [string, React.ReactNode][] = [
@@ -56,7 +59,7 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
     ["Entreprise", session.company ? <Link key="c" href={`/admin/entreprises/${session.company.id}`} className="hover:underline">{session.company.name}</Link> : "—"],
     ["Formateur", session.trainer?.name ?? "—"],
     ["Dates", `${formatDate(session.startDate)} → ${formatDate(session.endDate)}`],
-    ["Process", session.processSnapshot ? "Figé au démarrage" : "Pas encore figé (palier 2)"],
+    ["Process", frozenAt ? `Figé le ${formatDateTime(frozenAt)}` : "Suit le modèle jusqu'au démarrage"],
   ];
   if (canSupervise(me)) info.push(["Propriétaire", session.owner.name]);
 
@@ -74,6 +77,17 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
         actions={
           !isCancelled ? (
             <>
+              {session.status === "planned" ? (
+                <ConfirmButton
+                  action={startSession.bind(null, session.id)}
+                  title="Démarrer la session ?"
+                  description="Elle passe « En cours » et son process est figé définitivement : les échéances ne bougeront plus, même si le modèle de la formation change."
+                  confirmLabel="Démarrer"
+                  variant="secondary"
+                >
+                  Démarrer la session
+                </ConfirmButton>
+              ) : null}
               <Button asChild variant="outline" size="sm">
                 <Link href={`/admin/sessions/${session.id}/modifier`}>Modifier</Link>
               </Button>
@@ -102,6 +116,11 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
           </div>
         ))}
       </dl>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Checklist</h2>
+        <ChecklistSection sessionId={session.id} frozenAt={frozenAt} />
+      </section>
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Élèves inscrits</h2>

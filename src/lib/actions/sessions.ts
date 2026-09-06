@@ -8,6 +8,7 @@ import { requirePermission, type CurrentUser } from "@/lib/auth/session";
 import { assertOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { SessionStatus } from "@/generated/prisma/enums";
 import { parseForm, emptyToNull, type FormState } from "./shared";
+import { instantiateProcess, recomputeDueDates, freezeProcess } from "@/lib/process/instantiate";
 
 const sessionSchema = z
   .object({
@@ -62,7 +63,14 @@ export async function createSession(_prev: FormState, formData: FormData): Promi
   await checkCompany(parsed.data.companyId, ownerId, me);
 
   // Piège n°3 : la session pointe vers une VERSION précise, figée pour toujours.
-  const session = await prisma.session.create({ data: { ...parsed.data, ownerId } });
+  // La checklist (StepInstance) est instanciée immédiatement, avec ses échéances.
+  const session = await prisma.$transaction(async (tx) => {
+    const created = await tx.session.create({ data: { ...parsed.data, ownerId } });
+    await instantiateProcess(tx, created.id);
+    // Créée directement en cours/terminée : le process est figé d'emblée.
+    if (created.status === "running" || created.status === "done") await freezeProcess(tx, created.id);
+    return created;
+  });
   revalidate(session.id, version.formationId);
   redirect(`/admin/sessions/${session.id}`);
 }
@@ -78,9 +86,27 @@ export async function updateSession(id: string, _prev: FormState, formData: Form
   void _ignored;
   await checkCompany(data.companyId, current.ownerId, me);
 
-  await prisma.session.update({ where: { id }, data });
+  await prisma.$transaction(async (tx) => {
+    await tx.session.update({ where: { id }, data });
+    // Tant que la session est planifiée et non figée, les échéances suivent les dates.
+    await recomputeDueDates(tx, id);
+    // Premier passage en cours (ou terminée) : gel définitif du process (piège n°5).
+    if (data.status === "running" || data.status === "done") await freezeProcess(tx, id);
+  });
   revalidate(id, current.formationVersion.formationId);
   redirect(`/admin/sessions/${id}`);
+}
+
+// « Démarrer » : passe en cours et fige le process. Irréversible pour le snapshot.
+export async function startSession(id: string) {
+  const me = await requirePermission("can_manage_sessions");
+  const current = await loadOwnedSession(id, me);
+  if (current.status !== "planned") throw new Error("Seule une session planifiée peut être démarrée");
+  await prisma.$transaction(async (tx) => {
+    await tx.session.update({ where: { id }, data: { status: "running" } });
+    await freezeProcess(tx, id);
+  });
+  revalidate(id, current.formationVersion.formationId);
 }
 
 // « Supprimer » une session = la passer en annulée. Jamais de suppression physique.
