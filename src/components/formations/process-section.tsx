@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { applyDefaultProcess, removeStep, moveStep } from "@/lib/actions/process";
+import { applyDefaultProcess, copyProcessFrom, removeStep, moveStep } from "@/lib/actions/process";
+import { listProcessSources } from "@/lib/queries/process";
+import { CopyProcessForm } from "./copy-process-form";
+import type { CurrentUser } from "@/lib/auth/session";
 import { PHASES, TRIGGER_ANCHOR, ACTION_TYPE } from "@/lib/labels";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/admin/confirm-button";
@@ -8,11 +11,13 @@ import { ConfirmButton } from "@/components/admin/confirm-button";
 // Onglet « Process » d'une version : étapes groupées par phase (spec §6).
 // Éditable sur un brouillon uniquement ; gelé une fois publié.
 export async function ProcessSection({
+  me,
   formationId,
   versionId,
   versionNumber,
   editable,
 }: {
+  me: CurrentUser;
   formationId: string;
   versionId: string;
   versionNumber: number;
@@ -28,19 +33,23 @@ export async function ProcessSection({
     },
   });
   const steps = template?.steps ?? [];
+  const sources = editable ? await listProcessSources(me, versionId) : [];
 
   if (steps.length === 0) {
     return (
       <div className="space-y-4 px-5 py-6 text-sm">
         <p className="text-foreground-secondary">Aucune étape dans le process de cette version.</p>
         {editable ? (
-          <div className="flex flex-wrap gap-2">
-            <form action={applyDefaultProcess.bind(null, versionId)}>
-              <Button type="submit" variant="outline">Appliquer le process standard (28 étapes)</Button>
-            </form>
-            <Button asChild variant="outline">
-              <Link href={`/admin/formations/${formationId}/process/nouvelle?v=${versionNumber}`}>Ajouter une étape</Link>
-            </Button>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <form action={applyDefaultProcess.bind(null, versionId)}>
+                <Button type="submit" variant="outline">Appliquer le process standard (28 étapes)</Button>
+              </form>
+              <Button asChild variant="outline">
+                <Link href={`/admin/formations/${formationId}/process/nouvelle?v=${versionNumber}`}>Ajouter une étape</Link>
+              </Button>
+            </div>
+            <CopyProcessForm action={copyProcessFrom.bind(null, versionId)} sources={sources} hasSteps={false} />
           </div>
         ) : null}
       </div>
@@ -111,6 +120,8 @@ export async function ProcessSection({
           </ol>
         </section>
       ))}
+
+      {editable ? <CopyProcessForm action={copyProcessFrom.bind(null, versionId)} sources={sources} hasSteps={steps.length > 0} /> : null}
     </div>
   );
 }

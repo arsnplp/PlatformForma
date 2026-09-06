@@ -10,6 +10,7 @@ import { TriggerType, TriggerAnchor, ActionType } from "@/generated/prisma/enums
 import { PHASE_NUMBERS, ACTION_TYPE } from "@/lib/labels";
 import { DEFAULT_PROCESS, DEFAULT_PROCESS_NAME, toStepTemplateData } from "@/lib/process/default-process";
 import { parseForm, emptyToNull, type FormState } from "./shared";
+import { z as zod } from "zod";
 
 // ── Garde-fous ─────────────────────────────────────────────────────────────
 // Le process d'une version est du MODÈLE : éditable uniquement sur un brouillon,
@@ -148,6 +149,70 @@ export async function moveStep(stepId: string, direction: "up" | "down") {
     prisma.stepTemplate.update({ where: { id: a.id }, data: { order: b.order } }),
   ]);
   revalidate(version.formationId);
+}
+
+// ── Bibliothèque : copier le process d'une autre version (spec §6.4) ────────
+// « Remplacer » vide d'abord le brouillon (jamais du vécu), « Ajouter » complète.
+// L'assigné suit la logique du process standard : une étape assignée au
+// propriétaire de la formation SOURCE est réassignée au propriétaire de la
+// formation CIBLE ; un rôle est conservé ; tout autre utilisateur est conservé.
+
+const copySchema = zod.object({
+  sourceVersionId: zod.string().uuid("Choisis un process à copier"),
+  mode: zod.enum(["replace", "append"]).default("append"),
+});
+
+export async function copyProcessFrom(targetVersionId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  const me = await requirePermission("can_edit_process_template");
+  const target = await loadDraftVersion(targetVersionId, me);
+  const parsed = parseForm(copySchema, formData);
+  if (!parsed.ok) return parsed.state;
+  if (parsed.data.sourceVersionId === targetVersionId) return { error: "Source et cible identiques." };
+
+  const source = await prisma.formationVersion.findUnique({
+    where: { id: parsed.data.sourceVersionId },
+    include: { formation: true, processTemplates: { where: { archivedAt: null }, take: 1, include: { steps: { orderBy: [{ phase: "asc" }, { order: "asc" }] } } } },
+  });
+  if (!source) return { error: "Process source introuvable." };
+  assertOwnerOrSupervisor(me, source.formation.ownerId);
+  const sourceSteps = source.processTemplates[0]?.steps ?? [];
+  if (sourceSteps.length === 0) return { error: "Ce process ne contient aucune étape." };
+
+  const sourceOwnerId = source.formation.ownerId;
+  const targetOwnerId = target.formation.ownerId;
+
+  await prisma.$transaction(async (tx) => {
+    const template = await tx.processTemplate.findFirst({ where: { formationVersionId: targetVersionId, archivedAt: null } })
+      ?? await tx.processTemplate.create({ data: { formationVersionId: targetVersionId, name: source.processTemplates[0]?.name ?? DEFAULT_PROCESS_NAME } });
+
+    if (parsed.data.mode === "replace") {
+      await tx.stepTemplate.deleteMany({ where: { processTemplateId: template.id } });
+    }
+    const last = await tx.stepTemplate.findFirst({ where: { processTemplateId: template.id }, orderBy: { order: "desc" } });
+    let order = last?.order ?? 0;
+    await tx.stepTemplate.createMany({
+      data: sourceSteps.map((s) => ({
+        processTemplateId: template.id,
+        order: ++order,
+        phase: s.phase,
+        name: s.name,
+        description: s.description,
+        assigneeUserId: s.assigneeUserId === sourceOwnerId ? targetOwnerId : s.assigneeUserId,
+        assigneeRoleId: s.assigneeRoleId,
+        triggerType: s.triggerType,
+        triggerAnchor: s.triggerAnchor,
+        triggerOffsetDays: s.triggerOffsetDays,
+        actionType: s.actionType,
+        actionParams: s.actionParams ?? undefined,
+      })),
+    });
+  });
+  // Remet l'ordre global cohérent (phase croissante) après un ajout.
+  const template = await prisma.processTemplate.findFirstOrThrow({ where: { formationVersionId: targetVersionId, archivedAt: null } });
+  await resequence(template.id);
+
+  revalidate(target.formationId);
+  redirect(`/admin/formations/${target.formationId}?v=${target.versionNumber}&tab=process`);
 }
 
 // Renumérote 1..n dans l'ordre (phase, ordre courant) — après suppression ou changement de phase.

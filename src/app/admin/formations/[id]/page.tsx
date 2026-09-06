@@ -200,7 +200,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
           </div>
 
           {activeTab === "process" ? (
-            <ProcessSection formationId={formation.id} versionId={current.id} versionNumber={current.versionNumber} editable={canEditContent && hasPermission(me, "can_edit_process_template")} />
+            <ProcessSection me={me} formationId={formation.id} versionId={current.id} versionNumber={current.versionNumber} editable={canEditContent && hasPermission(me, "can_edit_process_template")} />
           ) : (
           <div className="space-y-4 px-5 py-4">
             {!canEditContent ? (
