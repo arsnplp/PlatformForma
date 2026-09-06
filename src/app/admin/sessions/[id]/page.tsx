@@ -119,7 +119,7 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Checklist</h2>
-        <ChecklistSection sessionId={session.id} frozenAt={frozenAt} />
+        <ChecklistSection sessionId={session.id} frozenAt={frozenAt} sessionStatus={session.status} readOnly={isCancelled} />
       </section>
 
       <section className="space-y-4">
