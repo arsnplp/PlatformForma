@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSessionAccess, getLessonForSession } from "@/lib/queries/student-space";
 import { BlockView } from "@/components/content/block-view";
+import { StudentExercises } from "@/components/content/student-exercises";
 import { readText } from "@/lib/content/block-payload";
 
 // Lecture d'une leçon : exactement le rendu de l'éditeur (spec §3.2).
@@ -43,6 +44,8 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
           blocks.map((b) => <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />)
         )}
       </article>
+
+      <StudentExercises lessonId={lesson.id} sessionId={sessionId} userId={me.id} readOnly={access.role === "preview"} />
 
       <nav className="flex items-center justify-between gap-3 border-t pt-5 text-sm">
         {previous ? (
