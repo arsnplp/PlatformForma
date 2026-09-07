@@ -28,6 +28,23 @@ export async function executeStepNow(instanceId: string): Promise<ExecuteState> 
   const report = await executeStepInstance(instanceId, me.id);
   await logAccess(me.id, `execute_step:${report.sent} envoi(s)`, "step_instance", instanceId, { dedupMinutes: 0 });
 
+  // Toute exécution, manuelle comprise, laisse une trace dans le journal.
+  const status = report.sent > 0 && report.failed === 0 ? "success" : report.sent > 0 ? "partial" : report.failed > 0 ? "failed" : "skipped";
+  await prisma.stepExecution.create({
+    data: {
+      stepInstanceId: instanceId,
+      sessionId: instance.session.id,
+      trigger: "manual",
+      status,
+      sentCount: report.sent,
+      failedCount: report.failed,
+      sandbox: report.sandbox,
+      triggeredById: me.id,
+      details: { redirectedTo: report.redirectedTo ?? null, skipped: report.skipped, recipients: report.details },
+    },
+  });
+  revalidatePath("/admin/envois");
+
   revalidatePath(`/admin/sessions/${instance.session.id}`);
   revalidatePath("/admin");
   return { report };

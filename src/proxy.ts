@@ -11,7 +11,10 @@ export async function proxy(request: NextRequest) {
   const { response, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  const isPublic = PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/auth/");
+  // Les routes API portent leur propre authentification (secret du cron,
+  // session applicative…) et doivent répondre 401, jamais une redirection HTML.
+  const isApi = pathname.startsWith("/api/");
+  const isPublic = isApi || PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/auth/");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

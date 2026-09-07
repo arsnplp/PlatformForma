@@ -38,6 +38,12 @@ Ce principe gouverne le versioning, le soft-delete et la conformité audit (Qual
 - **Design tokens uniques** (couleurs, échelle typo, espacements) centralisés et branchés sur Tailwind ; composants shadcn/ui (Radix) restylés sur ces tokens. **Un seul design system** partagé back-office + espace élève.
 - **Markdown parfait** : titres, gras/italique/barré, listes imbriquées, cases à cocher, citations, code avec coloration syntaxique (Shiki/Prism), tables, liens, images, séparateurs, callouts. Édition par blocs (BlockNote ou équivalent) : drag & drop, menu « / », WYSIWYG identique au rendu élève.
 
+## Déploiement
+
+`DEPLOIEMENT.md` liste tout ce qui reste à régler avant la mise en production.
+**Le tenir à jour** : dès qu'un palier introduit une variable d'environnement, un
+secret, une tâche planifiée ou une bascule manuelle, ajouter la ligne correspondante.
+
 ## Méthode de travail — palier par palier (spec §13)
 
 - On avance **palier par palier** (1 Fondations → 2 Moteur de checklist → 3 Automatisation → 4 Espace élève → 5 Signature + GED → 6 Visio → 7 Logs & analytics). Chaque palier livre un outil utilisable.

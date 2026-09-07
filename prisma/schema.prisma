@@ -108,6 +108,18 @@ enum ActionType {
   checklist_only
 }
 
+enum ExecutionTrigger {
+  manual
+  cron
+}
+
+enum ExecutionStatus {
+  success
+  partial
+  failed
+  skipped
+}
+
 enum StepInstanceStatus {
   pending
   done
@@ -180,6 +192,7 @@ model User {
   enrollments              Enrollment[]
   stepTemplatesAssigned    StepTemplate[]     @relation("StepTemplateAssigneeUser")
   stepInstancesDone        StepInstance[]     @relation("StepInstanceDoneBy")
+  executionsTriggered      StepExecution[]    @relation("ExecutionTriggeredBy")
   documentsOwned           Document[]         @relation("DocumentOwner")
   attendances              Attendance[]
   conversations            Conversation[]
@@ -481,6 +494,7 @@ model Session {
   submissions    Submission[]
   activityLogs   ActivityLog[]
   timeAggregates TimeAggregate[]
+  executions     StepExecution[]
 
   @@index([ownerId])
   @@index([formationVersionId])
@@ -574,9 +588,39 @@ model StepInstance {
   stepTemplate StepTemplate @relation(fields: [stepTemplateId], references: [id], onDelete: Restrict)
   doneBy       User?        @relation("StepInstanceDoneBy", fields: [doneById], references: [id], onDelete: Restrict)
 
+  executions StepExecution[]
+
   @@unique([sessionId, stepTemplateId])
   @@index([status, dueDate])
   @@map("step_instances")
+}
+
+/// Journal d'exécution d'une étape (envoi de mail) : qui/quoi/quand, succès ou
+/// échec, pour audit et relance. Immuable : une tentative n'est jamais réécrite.
+model StepExecution {
+  id             String           @id @default(uuid()) @db.Uuid
+  stepInstanceId String           @map("step_instance_id") @db.Uuid
+  sessionId      String           @map("session_id") @db.Uuid
+  trigger        ExecutionTrigger
+  status         ExecutionStatus
+  sentCount      Int              @default(0) @map("sent_count")
+  failedCount    Int              @default(0) @map("failed_count")
+  /// true si l'envoi a été redirigé vers l'adresse de test (bac à sable).
+  sandbox        Boolean          @default(true)
+  /// Détail par destinataire : adresse voulue, adresse réelle, erreur éventuelle.
+  details        Json?
+  /// Null quand l'exécution vient du cron.
+  triggeredById  String?          @map("triggered_by") @db.Uuid
+  at             DateTime         @default(now())
+
+  stepInstance StepInstance @relation(fields: [stepInstanceId], references: [id], onDelete: Restrict)
+  session      Session      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  triggeredBy  User?        @relation("ExecutionTriggeredBy", fields: [triggeredById], references: [id], onDelete: Restrict)
+
+  @@index([sessionId, at])
+  @@index([stepInstanceId, at])
+  @@index([status, at])
+  @@map("step_executions")
 }
 
 model MessageTemplate {
