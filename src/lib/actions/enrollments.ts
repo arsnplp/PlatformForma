@@ -10,6 +10,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { EnrollmentStatus } from "@/generated/prisma/enums";
 import { parseForm, fieldError, emptyToNull, type FormState } from "./shared";
 import { loadOwnedSession } from "./sessions";
+import { ensureConversation } from "@/lib/queries/conversations";
 
 // État étendu : après création d'un compte élève, le mot de passe temporaire
 // est affiché UNE fois (l'invitation par email arrive au palier 4).
@@ -49,6 +50,8 @@ async function enroll(sessionId: string, userId: string) {
   const existing = await prisma.enrollment.findUnique({ where: { sessionId_userId: { sessionId, userId } } });
   if (existing) return { already: true };
   await prisma.enrollment.create({ data: { sessionId, userId } });
+  // Un fil de discussion par élève et par session, ouvert dès l'inscription.
+  await ensureConversation(sessionId, userId);
   return { already: false };
 }
 
@@ -105,6 +108,7 @@ export async function enrollStudent(sessionId: string, _prev: EnrollState, formD
       update: {},
     }),
     prisma.enrollment.create({ data: { sessionId, userId: data.user.id } }),
+    prisma.conversation.create({ data: { sessionId, userId: data.user.id } }),
   ]);
   revalidatePath(`/admin/sessions/${sessionId}`);
   return { created: { email: email!, tempPassword } };

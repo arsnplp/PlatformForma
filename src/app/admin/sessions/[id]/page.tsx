@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { EnrollForm } from "@/components/sessions/enroll-form";
 import { ChecklistSection } from "@/components/sessions/checklist-section";
-import { MessagesSection } from "@/components/sessions/messages-section";
+import { ConversationsSection } from "@/components/sessions/conversations-section";
 
 export default async function SessionPage({ params }: PageProps<"/admin/sessions/[id]">) {
   const { id } = await params;
@@ -125,8 +125,11 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Messages envoyés</h2>
-        <MessagesSection sessionId={session.id} />
+        <h2 className="text-xl font-semibold">Conversations</h2>
+        <p className="-mt-2 text-sm text-foreground-secondary">
+          Un fil par élève. Les mails envoyés automatiquement y figurent aussi.
+        </p>
+        <ConversationsSection sessionId={session.id} />
       </section>
 
       <section className="space-y-4">

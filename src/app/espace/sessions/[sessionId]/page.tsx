@@ -40,6 +40,11 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
         {fv.formation.description ? (
           <p className="mt-2 text-foreground-secondary">{fv.formation.description}</p>
         ) : null}
+        <p className="mt-3 text-sm">
+          <Link href={`/espace/sessions/${sessionId}/messages`} className="font-medium text-brand hover:underline">
+            Messages avec mon formateur →
+          </Link>
+        </p>
         <p className="mt-3 text-sm text-foreground-tertiary">
           {session.name} · du {formatDate(session.startDate)} au {formatDate(session.endDate)}
           {session.durationHours ? ` · ${session.durationHours} heures` : ""}

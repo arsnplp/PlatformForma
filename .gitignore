@@ -44,3 +44,6 @@ next-env.d.ts
 
 /src/generated/prisma
 .tmp-upload/
+
+# Artefacts de test navigateur (Playwright MCP)
+.playwright-mcp/
