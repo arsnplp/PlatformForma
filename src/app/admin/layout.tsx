@@ -7,7 +7,7 @@ import { ADMIN_NAV } from "@/components/admin/nav";
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const user = await requireUser("/admin");
-  if (!hasPermission(user, "can_access_backoffice")) redirect("/");
+  if (!hasPermission(user, "can_access_backoffice")) redirect("/espace");
 
   const items = ADMIN_NAV.filter((i) => !i.permission || hasPermission(user, i.permission));
 

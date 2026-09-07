@@ -4,14 +4,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { requirePermission } from "./session";
+import { getCurrentUser, hasPermission, requirePermission } from "./session";
 
 export type ActionState = { error?: string } | undefined;
 
-function safeNextPath(value: FormDataEntryValue | null): string {
+// Uniquement un chemin interne, jamais une URL externe.
+function safeNextPath(value: FormDataEntryValue | null): string | null {
   const next = typeof value === "string" ? value : "";
-  // Uniquement un chemin interne, jamais une URL externe.
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/admin";
+  return next.startsWith("/") && !next.startsWith("//") ? next : null;
 }
 
 export async function login(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -23,7 +23,12 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "Identifiants incorrects." };
 
-  redirect(safeNextPath(formData.get("next")));
+  const requested = safeNextPath(formData.get("next"));
+  if (requested) redirect(requested);
+
+  // Sans destination demandée : le personnel va au back-office, l'élève dans son espace.
+  const me = await getCurrentUser();
+  redirect(me && hasPermission(me, "can_access_backoffice") ? "/admin" : "/espace");
 }
 
 export async function logout() {
