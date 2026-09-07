@@ -1,13 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { addBlock, updateBlock, duplicateBlock, removeBlock, reorderBlocks } from "@/lib/actions/blocks";
 import type { BlockChoice } from "@/lib/content/block-types";
 import { SlashMenu } from "./slash-menu";
+import { MediaPicker } from "./media-picker";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type EditorBlock = { id: string; order: number; markdown: string; html: string };
+export type EditorBlock = {
+  id: string;
+  order: number;
+  /// Vide pour un bloc média : seul le rendu serveur est affiché.
+  markdown: string;
+  isText: boolean;
+};
 
 // Zone « + Ajouter un bloc » entre deux blocs : révélée au survol, ouvre le menu « / ».
 function AddZone({
@@ -49,14 +57,26 @@ function AddZone({
 // Lecture : le HTML vient du serveur, donc identique au rendu élève.
 // Édition : on bascule un bloc en zone de texte Markdown ; à la sauvegarde,
 // le serveur re-rend le bloc. Un bloc = une ligne en base, réordonnable.
-export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: EditorBlock[] }) {
+export function BlockEditor({
+  lessonId,
+  blocks,
+  rendered,
+}: {
+  lessonId: string;
+  blocks: EditorBlock[];
+  /// Rendu de chaque bloc, calculé par le serveur : l'aperçu est exactement
+  /// ce que verra l'élève, médias compris.
+  rendered: Record<string, ReactNode>;
+}) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [menuAfter, setMenuAfter] = useState<number | "end" | null>(null);
+  const [mediaAfter, setMediaAfter] = useState<{ position: number | "end"; afterOrder: number | null; mode: "file" | "embed" } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const justCreated = useRef<string | null>(null);
 
@@ -94,7 +114,13 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
     });
   }
 
-  function insert(choice: BlockChoice, afterOrder: number | null) {
+  function insert(choice: BlockChoice, afterOrder: number | null, position: number | "end") {
+    // Bloc média : on ouvre le sélecteur plutôt que d'insérer du Markdown.
+    if (choice.media) {
+      setMenuAfter(null);
+      setMediaAfter({ position, afterOrder, mode: choice.media });
+      return;
+    }
     const markdown = choice.template.replace("|", "");
     startTransition(async () => {
       const { id } = await addBlock(lessonId, afterOrder, markdown);
@@ -118,6 +144,18 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
     <div className={cn("space-y-1", pending && "opacity-70")}>
       {error ? <p className="rounded-md bg-status-red-bg px-3 py-2 text-sm text-status-red">{error}</p> : null}
 
+      {mediaAfter ? (
+        <div className="flex justify-center py-2">
+          <MediaPicker
+            lessonId={lessonId}
+            afterOrder={mediaAfter.afterOrder}
+            mode={mediaAfter.mode}
+            onDone={() => { setMediaAfter(null); router.refresh(); }}
+            onCancel={() => setMediaAfter(null)}
+          />
+        </div>
+      ) : null}
+
       {blocks.length === 0 ? (
         <div className="rounded-lg border border-dashed px-6 py-10 text-center">
           <p className="text-sm text-foreground-secondary">Cette leçon est vide.</p>
@@ -128,7 +166,7 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
             {menuAfter === "end" ? (
               <div className="relative">
                 <div className="absolute left-1/2 top-2 -translate-x-1/2">
-                  <SlashMenu onPick={(c) => insert(c, null)} onClose={() => setMenuAfter(null)} />
+                  <SlashMenu onPick={(c) => insert(c, null, "end")} onClose={() => setMenuAfter(null)} />
                 </div>
               </div>
             ) : null}
@@ -138,7 +176,7 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
         <AddZone
           open={menuAfter === -1}
           onToggle={() => setMenuAfter(menuAfter === -1 ? null : -1)}
-          onPick={(c) => insert(c, null)}
+          onPick={(c) => insert(c, null, -1)}
           onClose={() => setMenuAfter(null)}
         />
       )}
@@ -167,7 +205,7 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
                 </div>
               ) : null}
 
-              {isEditing ? (
+              {isEditing && block.isText ? (
                 <div className="space-y-2 rounded-md border bg-background p-2">
                   <textarea
                     ref={textareaRef}
@@ -192,22 +230,28 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
                 </div>
               ) : (
                 <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => startEditing(block)}
-                    className="block w-full cursor-text px-2 py-1 text-left"
-                    aria-label={`Modifier le bloc ${index + 1}`}
-                  >
-                    {block.markdown.trim() ? (
-                      <div className="prose-app" dangerouslySetInnerHTML={{ __html: block.html }} />
-                    ) : (
-                      <span className="text-sm text-foreground-tertiary">Bloc vide — cliquer pour écrire</span>
-                    )}
-                  </button>
+                  {block.isText ? (
+                    <button
+                      type="button"
+                      onClick={() => startEditing(block)}
+                      className="block w-full cursor-text px-2 py-1 text-left"
+                      aria-label={`Modifier le bloc ${index + 1}`}
+                    >
+                      {block.markdown.trim() ? (
+                        rendered[block.id]
+                      ) : (
+                        <span className="text-sm text-foreground-tertiary">Bloc vide — cliquer pour écrire</span>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="px-2 py-1">{rendered[block.id]}</div>
+                  )}
                   {/* Actions flottantes : elles ne réduisent jamais la largeur du contenu,
                       pour que l'aperçu soit à la largeur réelle de lecture de l'élève. */}
                   <span className="absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border bg-background/95 px-0.5 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => startEditing(block)}>Modifier</Button>
+                    {block.isText ? (
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => startEditing(block)}>Modifier</Button>
+                    ) : null}
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => startTransition(async () => { await duplicateBlock(block.id); })}>Dupliquer</Button>
                     <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-foreground-tertiary" onClick={() => startTransition(async () => { await removeBlock(block.id); })}>Retirer</Button>
                   </span>
@@ -217,7 +261,7 @@ export function BlockEditor({ lessonId, blocks }: { lessonId: string; blocks: Ed
             <AddZone
               open={menuAfter === index}
               onToggle={() => setMenuAfter(menuAfter === index ? null : index)}
-              onPick={(c) => insert(c, block.order)}
+              onPick={(c) => insert(c, block.order, index)}
               onClose={() => setMenuAfter(null)}
             />
           </div>

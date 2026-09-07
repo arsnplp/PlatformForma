@@ -3,19 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { isOwnerOrSupervisor } from "@/lib/auth/ownership";
-import { renderMarkdown } from "@/lib/markdown/render";
 import { BlockEditor, type EditorBlock } from "@/components/content/block-editor";
-import { Prose } from "@/components/content/prose";
+import { BlockView } from "@/components/content/block-view";
+import { readText } from "@/lib/content/block-payload";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
-
-const markdownOf = (payload: unknown): string => {
-  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    const v = (payload as Record<string, unknown>).markdown;
-    if (typeof v === "string") return v;
-  }
-  return "";
-};
 
 // Éditeur d'une leçon : pile de blocs réordonnables (spec §8.1).
 // Le HTML de chaque bloc est rendu ici, côté serveur : l'aperçu du formateur
@@ -39,11 +31,17 @@ export default async function LessonPage({ params }: PageProps<"/admin/formation
   const editable = version.status === "draft" && !formation.archivedAt;
   const backHref = `/admin/formations/${id}?v=${version.versionNumber}&tab=content`;
 
-  const blocks: EditorBlock[] = await Promise.all(
-    lesson.contentBlocks.map(async (b) => {
-      const markdown = markdownOf(b.payload);
-      return { id: b.id, order: b.order, markdown, html: markdown.trim() ? await renderMarkdown(markdown) : "" };
-    }),
+  const blocks: EditorBlock[] = lesson.contentBlocks.map((b) => ({
+    id: b.id,
+    order: b.order,
+    markdown: b.type === "text" ? readText(b.payload) : "",
+    isText: b.type === "text",
+  }));
+
+  // Chaque bloc est rendu ici, côté serveur, puis passé à l'éditeur : l'aperçu
+  // du formateur est exactement ce que verra l'élève, médias compris.
+  const rendered = Object.fromEntries(
+    lesson.contentBlocks.map((b) => [b.id, <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />]),
   );
 
   const siblings = lesson.module.lessons;
@@ -76,13 +74,13 @@ export default async function LessonPage({ params }: PageProps<"/admin/formation
 
       <article className="max-w-content">
         {editable ? (
-          <BlockEditor lessonId={lesson.id} blocks={blocks} />
+          <BlockEditor lessonId={lesson.id} blocks={blocks} rendered={rendered} />
         ) : blocks.length === 0 ? (
           <p className="text-sm text-foreground-tertiary">Cette leçon ne contient aucun bloc.</p>
         ) : (
           <div className="space-y-1">
-            {blocks.map((b) => (
-              <Prose key={b.id} markdown={b.markdown} />
+            {lesson.contentBlocks.map((b) => (
+              <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />
             ))}
           </div>
         )}

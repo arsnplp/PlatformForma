@@ -2,15 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSessionAccess, getLessonForSession } from "@/lib/queries/student-space";
-import { Prose } from "@/components/content/prose";
-
-const markdownOf = (payload: unknown): string => {
-  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    const v = (payload as Record<string, unknown>).markdown;
-    if (typeof v === "string") return v;
-  }
-  return "";
-};
+import { BlockView } from "@/components/content/block-view";
+import { readText } from "@/lib/content/block-payload";
 
 // Lecture d'une leçon : exactement le rendu de l'éditeur (spec §3.2).
 export default async function StudentLessonPage({ params }: PageProps<"/espace/sessions/[sessionId]/lecons/[lessonId]">) {
@@ -22,7 +15,8 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
   const data = await getLessonForSession(sessionId, lessonId);
   if (!data) notFound();
   const { lesson, previous, next, position, total } = data;
-  const blocks = lesson.contentBlocks.map((b) => markdownOf(b.payload)).filter((m) => m.trim().length > 0);
+  // Un bloc texte vide n'est pas affiché ; les blocs médias le sont toujours.
+  const blocks = lesson.contentBlocks.filter((b) => b.type !== "text" || readText(b.payload).trim().length > 0);
 
   return (
     <div className="space-y-8">
@@ -46,7 +40,7 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
         {blocks.length === 0 ? (
           <p className="text-sm text-foreground-tertiary">Cette leçon n&apos;a pas encore de contenu.</p>
         ) : (
-          blocks.map((markdown, i) => <Prose key={i} markdown={markdown} />)
+          blocks.map((b) => <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />)
         )}
       </article>
 

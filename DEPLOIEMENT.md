@@ -33,6 +33,19 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 - [ ] Vérifier après le premier passage réel que le journal (menu **Envois**) affiche
       bien `mode: production` et les vrais destinataires.
 
+## Fichiers et stockage (Palier 4)
+
+- [ ] **Créer le bucket privé `content`** sur le projet Supabase de production
+      (il l'est déjà en développement). Il doit rester **non public** : chaque
+      lecture passe par `/api/fichiers/[blockId]`, qui vérifie les droits puis
+      délivre une URL signée de 60 secondes.
+      Vérification : dans Supabase, Storage → `content` → le bucket ne doit pas
+      être marqué « public ».
+- [ ] Vérifier la limite de taille côté Supabase si le plan en impose une
+      (l'application refuse au-delà de 50 Mo par fichier).
+- [ ] Prévoir la sauvegarde du bucket : les fichiers de contenu ne sont pas
+      dans la base et ne sont donc pas couverts par les sauvegardes Postgres.
+
 ## Secrets et accès
 
 - [ ] **Régénérer / vérifier les secrets Supabase** pour la production :

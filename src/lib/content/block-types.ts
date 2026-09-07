@@ -8,9 +8,11 @@ export type BlockChoice = {
   key: string;
   label: string;
   hint: string;
-  /// Markdown inséré à la création. `|` marque où placer le curseur.
+  /// Markdown inséré à la création (blocs texte uniquement).
   template: string;
   keywords: string[];
+  /// Les blocs médias ouvrent un sélecteur au lieu d'insérer du Markdown.
+  media?: "file" | "embed";
 };
 
 export const BLOCK_CHOICES: BlockChoice[] = [
@@ -27,6 +29,8 @@ export const BLOCK_CHOICES: BlockChoice[] = [
   { key: "warning", label: "Encadré Attention", hint: "Point de vigilance", template: "> [!WARNING]\n> |", keywords: ["attention", "warning", "vigilance"] },
   { key: "table", label: "Tableau", hint: "Trois colonnes", template: "| Colonne | Colonne | Colonne |\n| --- | --- | --- |\n| | | |", keywords: ["tableau", "table"] },
   { key: "divider", label: "Séparateur", hint: "Trait horizontal", template: "---", keywords: ["separateur", "trait", "hr", "ligne"] },
+  { key: "file", label: "Image, PDF ou vidéo", hint: "Fichier à envoyer", template: "", keywords: ["image", "photo", "pdf", "video", "fichier", "document"], media: "file" },
+  { key: "embed", label: "Vidéo YouTube ou Vimeo", hint: "Lien externe", template: "", keywords: ["youtube", "vimeo", "video", "lien", "integration", "embed"], media: "embed" },
 ];
 
 export function findChoice(key: string): BlockChoice | undefined {
