@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "@/components/admin/status-badge";
+import { FileSubmission } from "./file-submission";
 import { cn } from "@/lib/utils";
 
 type Config = QcmConfig | ShortAnswerConfig | LongTextConfig | QuizConfig | FileUploadConfig | { answer: boolean };
@@ -42,11 +43,8 @@ export function ExerciseRunner({
   const meta = EXERCISE_TYPES[type];
 
   if (type === "file_upload") {
-    return (
-      <p className="rounded-md bg-surface px-3 py-2 text-sm text-foreground-secondary">
-        Le dépôt de fichier arrive prochainement. Remettez votre livrable à votre formateur en attendant.
-      </p>
-    );
+    const c = config as FileUploadConfig;
+    return <FileSubmission exerciseId={exerciseId} sessionId={sessionId} maxFiles={c.maxFiles ?? 1} guidance={c.guidance ?? ""} />;
   }
 
   function buildAnswer(): Answer | null {
@@ -224,11 +222,18 @@ export function ExerciseResult({
   }
   const ratio = max > 0 && score !== null ? score / max : 0;
   const tone = ratio >= 1 ? "green" : ratio > 0 ? "yellow" : "red";
+  // Le commentaire automatique n'a de sens qu'avec une correction automatique :
+  // sur une copie notée par le formateur, c'est son retour qui fait foi.
+  const isAuto = Boolean(details && details.length > 0);
   return (
     <div className="space-y-3">
       <p className="flex items-center gap-2 text-sm">
         <StatusBadge tone={tone}>{score ?? 0} / {max}</StatusBadge>
-        <span className="text-foreground-secondary">{ratio >= 1 ? "Tout juste." : ratio > 0 ? "Partiellement juste." : "À revoir."}</span>
+        {isAuto ? (
+          <span className="text-foreground-secondary">{ratio >= 1 ? "Tout juste." : ratio > 0 ? "Partiellement juste." : "À revoir."}</span>
+        ) : (
+          <span className="text-foreground-secondary">Corrigé par votre formateur.</span>
+        )}
       </p>
       {details && details.length > 0 ? (
         <ul className="space-y-1 text-sm">

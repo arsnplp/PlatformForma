@@ -3,6 +3,9 @@ import { Prose } from "./prose";
 import { ExerciseRunner, ExerciseResult } from "./exercise-runner";
 import { EXERCISE_TYPES, parseConfig, defaultConfig } from "@/lib/content/exercise-config";
 import type { GradeDetail } from "@/lib/content/grading";
+import { readSubmissionFiles } from "@/lib/content/submission-payload";
+import { formatBytes } from "@/lib/storage/config";
+import Link from "next/link";
 import { StatusBadge } from "@/components/admin/status-badge";
 
 type Content = { grade?: { score: number; max: number; details: GradeDetail[] } | null };
@@ -52,6 +55,17 @@ export async function StudentExercises({
             <Prose markdown={e.statement} />
 
             {done ? (
+              <>
+                {readSubmissionFiles(done.content).length > 0 ? (
+                  <ul className="space-y-1">
+                    {readSubmissionFiles(done.content).map((f, i) => (
+                      <li key={i} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm">
+                        <span className="min-w-0 truncate">{f.name} <span className="text-xs text-foreground-tertiary">· {formatBytes(f.sizeBytes)}</span></span>
+                        <Link href={`/api/livrables/${done.id}?i=${i}`} target="_blank" rel="noopener noreferrer" className="shrink-0 text-sm underline underline-offset-2">Ouvrir</Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               <ExerciseResult
                 status={done.status}
                 score={score}
@@ -59,6 +73,7 @@ export async function StudentExercises({
                 details={content.grade?.details ?? null}
                 feedback={done.feedback}
               />
+              </>
             ) : readOnly ? (
               <p className="rounded-md bg-surface px-3 py-2 text-sm text-foreground-secondary">
                 Aperçu formateur : les réponses ne sont pas enregistrées.

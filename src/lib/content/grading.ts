@@ -7,7 +7,8 @@ export type Answer =
   | { kind: "true_false"; value: boolean }
   | { kind: "short_answer"; text: string }
   | { kind: "long_text"; text: string }
-  | { kind: "quiz"; answers: ({ selected: number[] } | { value: boolean })[] };
+  | { kind: "quiz"; answers: ({ selected: number[] } | { value: boolean })[] }
+  | { kind: "file_upload"; files: { path: string; name: string; mimeType: string; sizeBytes: number }[] };
 
 export type GradeDetail = { index: number; correct: boolean; points: number; expected?: string };
 export type Grade = { score: number; max: number; details: GradeDetail[] };

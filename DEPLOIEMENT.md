@@ -43,8 +43,13 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       être marqué « public ».
 - [ ] Vérifier la limite de taille côté Supabase si le plan en impose une
       (l'application refuse au-delà de 50 Mo par fichier).
-- [ ] Prévoir la sauvegarde du bucket : les fichiers de contenu ne sont pas
-      dans la base et ne sont donc pas couverts par les sauvegardes Postgres.
+- [ ] **Créer le bucket privé `submissions`** (livrables d'élèves), lui aussi
+      **non public**. Accès par `/api/livrables/[submissionId]` : seuls l'auteur
+      et le formateur de la session, jamais les autres élèves.
+- [ ] Prévoir la sauvegarde des deux buckets : les fichiers ne sont pas dans la
+      base et ne sont donc pas couverts par les sauvegardes Postgres.
+- [ ] **Rétention des livrables** : définir une durée de conservation des copies
+      d'élèves (RGPD), distincte de celle des documents Qualiopi.
 
 ## Secrets et accès
 

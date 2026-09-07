@@ -73,3 +73,36 @@ export async function checkLessonEdit(lessonId: string, me: CurrentUser): Promis
   if (v.status !== "draft" || v.formation.archivedAt) return false;
   return v.formation.ownerId === me.id || canSupervise(me);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLOISONNEMENT DES LIVRABLES
+//
+// Un livrable déposé par un élève est plus sensible qu'un contenu de leçon :
+// il n'est visible que par son auteur et par le formateur qui gère la session.
+// Jamais par les autres élèves de la même session, même inscrits.
+//
+// C'est plus restrictif que checkBlockFileAccess : être inscrit à la session
+// ne suffit pas, il faut être l'auteur.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type SubmissionAccess = { allowed: false } | { allowed: true; role: "author" | "trainer" };
+
+export async function checkSubmissionAccess(submissionId: string, me: CurrentUser): Promise<SubmissionAccess> {
+  const submission = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    select: { userId: true, session: { select: { ownerId: true, trainerId: true } } },
+  });
+  if (!submission) return { allowed: false };
+
+  if (submission.userId === me.id) return { allowed: true, role: "author" };
+  if (canSupervise(me) || submission.session.ownerId === me.id || submission.session.trainerId === me.id) {
+    return { allowed: true, role: "trainer" };
+  }
+  return { allowed: false };
+}
+
+// Droit de corriger une soumission : formateur de la session, jamais l'élève.
+export async function canGradeSubmission(submissionId: string, me: CurrentUser): Promise<boolean> {
+  const access = await checkSubmissionAccess(submissionId, me);
+  return access.allowed && access.role === "trainer";
+}
