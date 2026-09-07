@@ -5,6 +5,7 @@ import { requireUser, hasPermission } from "@/lib/auth/session";
 import { isOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { BlockEditor, type EditorBlock } from "@/components/content/block-editor";
 import { BlockView } from "@/components/content/block-view";
+import { ExerciseList } from "@/components/content/exercise-list";
 import { readText } from "@/lib/content/block-payload";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -85,6 +86,8 @@ export default async function LessonPage({ params }: PageProps<"/admin/formation
           </div>
         )}
       </article>
+
+      <ExerciseList formationId={id} lessonId={lesson.id} editable={editable} />
 
       <nav className="flex items-center justify-between gap-3 border-t pt-4 text-sm">
         {previous ? (
