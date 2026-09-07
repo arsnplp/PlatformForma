@@ -45,7 +45,10 @@ export default async function FormationPage({ params, searchParams }: PageProps<
           createdBy: { select: { name: true } },
           modules: {
             orderBy: { order: "asc" },
-            include: { lessons: { orderBy: { order: "asc" } }, _count: { select: { exercises: true } } },
+            include: {
+              lessons: { orderBy: { order: "asc" }, include: { _count: { select: { contentBlocks: true } } } },
+              _count: { select: { exercises: true } },
+            },
           },
           sessions: {
             orderBy: { startDate: "desc" },
@@ -236,7 +239,12 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                           <li key={l.id} className="flex items-center justify-between gap-3">
                             <span>
                               <span className="mr-2 text-foreground-tertiary tabular-nums">{m.order}.{l.order}</span>
-                              {l.title}
+                              <Link href={`/admin/formations/${formation.id}/lecons/${l.id}`} className="hover:underline">
+                                {l.title}
+                              </Link>
+                              <span className="ml-2 text-xs text-foreground-tertiary">
+                                {l._count.contentBlocks} bloc(s)
+                              </span>
                             </span>
                             {canEditContent ? (
                               <form action={removeLesson.bind(null, l.id)}>
