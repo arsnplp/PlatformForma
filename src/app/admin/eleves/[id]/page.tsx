@@ -3,10 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { logAccess } from "@/lib/audit";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { getStudentDossier } from "@/lib/queries/students";
+import { getAccountState } from "@/lib/queries/account-state";
 import { ENROLLMENT_STATUS, SESSION_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
+import { ResendInvitation } from "@/components/admin/resend-invitation";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -24,6 +26,8 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
 
   await logAccess(me.id, "view_dossier", "user", student.id);
 
+  const account = await getAccountState(student.id);
+
   const signed = student.documentsOwned.filter((d) => d.signatureStatus === "signed").length;
   const pending = student.documentsOwned.filter((d) => d.signatureStatus === "pending").length;
 
@@ -33,7 +37,20 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
         breadcrumb={[{ label: "Élèves", href: "/admin/eleves" }]}
         title={student.name}
         description={student.email}
+        actions={<ResendInvitation userId={student.id} />}
       />
+
+      <p className="rounded-md bg-surface px-3 py-2 text-sm text-foreground-secondary">
+        {account.activated ? (
+          <>Compte activé · dernière connexion le {formatDateTime(account.lastSignInAt)}</>
+        ) : (
+          <>
+            <strong className="text-foreground">Compte pas encore activé</strong> — l&apos;élève n&apos;a pas
+            choisi son mot de passe.
+          </>
+        )}
+        {account.invitedAt ? <> · dernière invitation envoyée le {formatDateTime(account.invitedAt)}</> : null}
+      </p>
 
       <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-3">
         {[

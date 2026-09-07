@@ -64,11 +64,28 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 
 - [ ] **Définir `NEXT_PUBLIC_APP_URL`** avec l'URL publique (ex. `https://plateforma.nairox.fr`).
       Sans elle, la variable `{{lien_espace_eleve}}` des mails pointe vers
-      `http://localhost:3000/espace`. **À faire avant tout envoi réel.**
+      `http://localhost:3000/espace`, **et surtout le lien d'activation envoyé aux
+      élèves pointe vers une machine locale** : l'invitation serait inutilisable.
+      **À faire avant tout envoi réel.**
 - [ ] Appliquer les migrations Prisma sur la base de production (`prisma migrate deploy`).
 - [ ] Lancer le seed des rôles et permissions, et créer le compte super-administrateur.
 - [ ] Vérifier que les policies RLS sont bien actives sur la base de production
       (27 tables, voir la migration `rls_auth_sync`).
+
+## Invitation des élèves (Palier 4)
+
+- [ ] **Allonger la durée de validité des liens e-mail** dans Supabase
+      (*Authentication → Emails → Email OTP Expiration*) : 1 heure par défaut,
+      ce qui est court pour une invitation qu'un élève ouvre le soir. Viser 24 h.
+      Le lien reste à usage unique, et un lien expiré est toujours rattrapable
+      par « Renvoyer l'invitation » depuis la fiche de l'élève.
+- [ ] **Ne pas activer les mails d'authentification de Supabase** : la plateforme
+      génère elle-même le lien et l'envoie par Resend, pour que le bac à sable
+      s'applique et que le texte soit le nôtre. Un mail envoyé directement par
+      Supabase échapperait au garde-fou `MAIL_MODE`.
+- [ ] Vérifier après bascule en production qu'une invitation réelle arrive bien,
+      que le lien ouvre la page d'activation et que le mot de passe choisi
+      permet ensuite de se connecter.
 
 ## Conformité
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import type { EnrollState } from "@/lib/actions/enrollments";
 import { Input } from "@/components/ui/input";
 import { FormField, FormError } from "@/components/admin/form-field";
@@ -28,10 +29,19 @@ export function EnrollForm({
         </p>
       </div>
 
-      {state?.created ? (
+      {state?.created?.invited ? (
         <div className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">
-          Compte créé pour <strong>{state.created.email}</strong>. Mot de passe temporaire, affiché une seule fois :{" "}
-          <code className="rounded bg-background px-1.5 py-0.5 font-mono">{state.created.tempPassword}</code>
+          Compte créé pour <strong>{state.created.email}</strong>. Invitation envoyée à {state.created.sentTo}
+          {state.created.sandbox ? " (bac à sable : l'élève n'a rien reçu)" : ""} : il choisit son mot de passe
+          depuis le lien du message.
+        </div>
+      ) : null}
+
+      {state?.created && !state.created.invited ? (
+        <div className="rounded-md bg-status-orange-bg px-3 py-2 text-sm text-status-orange">
+          Compte créé pour <strong>{state.created.email}</strong> et inscrit, mais l&apos;invitation n&apos;est pas
+          partie : {state.created.error} — renvoie-la depuis{" "}
+          <Link href={`/admin/eleves/${state.created.userId}`} className="underline">sa fiche</Link>.
         </div>
       ) : null}
 
