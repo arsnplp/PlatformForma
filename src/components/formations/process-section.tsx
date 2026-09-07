@@ -5,6 +5,8 @@ import { listProcessSources } from "@/lib/queries/process";
 import { CopyProcessForm } from "./copy-process-form";
 import type { CurrentUser } from "@/lib/auth/session";
 import { PHASES, TRIGGER_ANCHOR, ACTION_TYPE } from "@/lib/labels";
+import { readSendMessageParams, RECIPIENTS } from "@/lib/process/action-params";
+import { prisma as db } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 
@@ -34,6 +36,12 @@ export async function ProcessSection({
   });
   const steps = template?.steps ?? [];
   const sources = editable ? await listProcessSources(me, versionId) : [];
+  // Noms des mails référencés par les étapes send_message.
+  const templateIds = steps.map((s) => readSendMessageParams(s.actionParams)?.templateId).filter((x): x is string => Boolean(x));
+  const mails = templateIds.length
+    ? await db.messageTemplate.findMany({ where: { id: { in: templateIds } }, select: { id: true, name: true } })
+    : [];
+  const mailName = new Map(mails.map((m) => [m.id, m.name]));
 
   if (steps.length === 0) {
     return (
@@ -95,6 +103,15 @@ export async function ProcessSection({
                     <p className="font-medium">{s.name}</p>
                     <p className="text-xs text-foreground-secondary">
                       {assignee} · {trigger} · {ACTION_TYPE[s.actionType].label}
+                      {(() => {
+                        const p = readSendMessageParams(s.actionParams);
+                        if (s.actionType !== "send_message") return null;
+                        return p ? (
+                          <span className="text-brand"> → « {mailName.get(p.templateId) ?? "mail supprimé"} » à {RECIPIENTS[p.recipient].toLowerCase()}</span>
+                        ) : (
+                          <span className="text-status-orange"> → mail non configuré</span>
+                        );
+                      })()}
                     </p>
                     {s.description ? <p className="mt-0.5 text-xs text-foreground-tertiary">{s.description}</p> : null}
                   </div>

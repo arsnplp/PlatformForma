@@ -8,8 +8,10 @@ import { requirePermission, type CurrentUser } from "@/lib/auth/session";
 import { assertOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { TriggerType, TriggerAnchor, ActionType } from "@/generated/prisma/enums";
 import { PHASE_NUMBERS, ACTION_TYPE } from "@/lib/labels";
+import { RECIPIENT_KEYS, type Recipient } from "@/lib/process/action-params";
 import { DEFAULT_PROCESS, DEFAULT_PROCESS_NAME, toStepTemplateData } from "@/lib/process/default-process";
-import { parseForm, emptyToNull, type FormState } from "./shared";
+import { DEFAULT_TEMPLATES } from "@/lib/messages/default-templates";
+import { parseForm, fieldError, emptyToNull, type FormState } from "./shared";
 import { z as zod } from "zod";
 
 // ── Garde-fous ─────────────────────────────────────────────────────────────
@@ -43,14 +45,26 @@ export async function ensureProcessTemplate(versionId: string, name = DEFAULT_PR
   return prisma.processTemplate.create({ data: { formationVersionId: versionId, name } });
 }
 
-// Remplit une version (brouillon) avec le process par défaut. Utilisé à la
-// création d'une formation et via le bouton « Appliquer le process standard ».
+// Remplit une version (brouillon) avec le process par défaut ET les mails par
+// défaut, en reliant les étapes d'envoi à leur template (spec §6.4).
+// Utilisé à la création d'une formation et via « Appliquer le process standard ».
 export async function seedDefaultProcess(versionId: string, ownerId: string) {
   const template = await ensureProcessTemplate(versionId);
+
+  // Mails : créés s'ils manquent, puis indexés par nom pour relier les étapes.
+  const existing = await prisma.messageTemplate.findMany({ where: { formationVersionId: versionId }, select: { id: true, name: true } });
+  const names = new Set(existing.map((t) => t.name));
+  const toCreate = DEFAULT_TEMPLATES.filter((t) => !names.has(t.name));
+  if (toCreate.length > 0) {
+    await prisma.messageTemplate.createMany({ data: toCreate.map((t) => ({ formationVersionId: versionId, ...t })) });
+  }
+  const all = await prisma.messageTemplate.findMany({ where: { formationVersionId: versionId }, select: { id: true, name: true } });
+  const byName = new Map(all.map((t) => [t.name, t.id]));
+
   const last = await prisma.stepTemplate.findFirst({ where: { processTemplateId: template.id }, orderBy: { order: "desc" } });
   let order = last?.order ?? 0;
   await prisma.stepTemplate.createMany({
-    data: DEFAULT_PROCESS.map((s) => ({ processTemplateId: template.id, ...toStepTemplateData(s, ++order, ownerId) })),
+    data: DEFAULT_PROCESS.map((s) => ({ processTemplateId: template.id, ...toStepTemplateData(s, ++order, ownerId, byName) })),
   });
   return template;
 }
@@ -75,16 +89,23 @@ const stepSchema = z
     triggerAnchor: z.preprocess(emptyToNull, z.nativeEnum(TriggerAnchor).nullable()),
     triggerOffsetDays: z.preprocess(emptyToNull, z.coerce.number().int().min(-365).max(365).nullable()),
     actionType: z.nativeEnum(ActionType),
+    messageTemplateId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
+    recipient: z.preprocess(emptyToNull, z.enum(RECIPIENT_KEYS as [Recipient, ...Recipient[]]).nullable()),
   })
   .refine((d) => !(d.assigneeUserId && d.assigneeRoleId), { message: "Un utilisateur OU un rôle, pas les deux", path: ["assigneeRoleId"] })
   .refine((d) => d.triggerType === "manual" || d.triggerAnchor, { message: "Choisis une ancre", path: ["triggerAnchor"] })
-  .refine((d) => !ACTION_TYPE[d.actionType].availableFrom, { message: "Cette action arrive à un palier ultérieur", path: ["actionType"] });
+  .refine((d) => !ACTION_TYPE[d.actionType].availableFrom, { message: "Cette action arrive à un palier ultérieur", path: ["actionType"] })
+  .refine((d) => d.actionType !== "send_message" || d.messageTemplateId, { message: "Choisis le mail à envoyer", path: ["messageTemplateId"] })
+  .refine((d) => d.actionType !== "send_message" || d.recipient, { message: "Choisis le destinataire", path: ["recipient"] });
 
 function normalize(d: z.infer<typeof stepSchema>) {
+  const { messageTemplateId, recipient, ...rest } = d;
   return {
-    ...d,
+    ...rest,
     triggerAnchor: d.triggerType === "manual" ? null : d.triggerAnchor,
     triggerOffsetDays: d.triggerType === "time_offset" ? (d.triggerOffsetDays ?? 0) : null,
+    // Les paramètres d'action ne sont conservés que pour l'action concernée.
+    actionParams: d.actionType === "send_message" && messageTemplateId && recipient ? { templateId: messageTemplateId, recipient } : undefined,
   };
 }
 
@@ -93,6 +114,8 @@ export async function createStep(versionId: string, _prev: FormState, formData: 
   const version = await loadDraftVersion(versionId, me);
   const parsed = parseForm(stepSchema, formData);
   if (!parsed.ok) return parsed.state;
+  const badTemplate = await checkTemplate(versionId, parsed.data, formData);
+  if (badTemplate) return badTemplate;
 
   const template = await ensureProcessTemplate(versionId);
   // Insérée en fin de sa phase : ordre = dernière étape de phase ≤ celle-ci, les suivantes décalées.
@@ -114,6 +137,8 @@ export async function updateStep(stepId: string, _prev: FormState, formData: For
   const { step, version } = await loadDraftStep(stepId, me);
   const parsed = parseForm(stepSchema, formData);
   if (!parsed.ok) return parsed.state;
+  const badTemplate = await checkTemplate(version.id, parsed.data, formData);
+  if (badTemplate) return badTemplate;
 
   await prisma.stepTemplate.update({ where: { id: step.id }, data: normalize(parsed.data) });
   // Si la phase change, on replace l'étape en fin de sa nouvelle phase.
@@ -213,6 +238,17 @@ export async function copyProcessFrom(targetVersionId: string, _prev: FormState,
 
   revalidate(target.formationId);
   redirect(`/admin/formations/${target.formationId}?v=${target.versionNumber}&tab=process`);
+}
+
+// Le mail choisi doit appartenir à la MÊME version : une session enverra le
+// texte figé de sa version, jamais celui d'une autre formation.
+async function checkTemplate(versionId: string, data: z.infer<typeof stepSchema>, formData: FormData): Promise<FormState> {
+  if (data.actionType !== "send_message" || !data.messageTemplateId) return undefined;
+  const template = await prisma.messageTemplate.findFirst({
+    where: { id: data.messageTemplateId, formationVersionId: versionId, archivedAt: null },
+  });
+  if (template) return undefined;
+  return fieldError(formData, "messageTemplateId", "Ce mail n'appartient pas à cette version");
 }
 
 // Renumérote 1..n dans l'ordre (phase, ordre courant) — après suppression ou changement de phase.

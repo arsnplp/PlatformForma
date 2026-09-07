@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { PHASES, TRIGGER_ANCHOR, STEP_STATUS } from "@/lib/labels";
+import { readSendMessageParams, RECIPIENTS } from "@/lib/process/action-params";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -22,6 +23,10 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, rea
   if (instances.length === 0) {
     return <EmptyState title="Aucune étape">Le process de la version ne contenait aucune étape à la création de la session.</EmptyState>;
   }
+
+  const mailIds = instances.map((i) => readSendMessageParams(i.stepTemplate.actionParams)?.templateId).filter((x): x is string => Boolean(x));
+  const mails = mailIds.length ? await prisma.messageTemplate.findMany({ where: { id: { in: mailIds } }, select: { id: true, name: true } }) : [];
+  const mailName = new Map(mails.map((m) => [m.id, m.name]));
 
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   const byPhase = PHASES.map((p) => ({ ...p, items: instances.filter((i) => i.stepTemplate.phase === p.n) })).filter((p) => p.items.length > 0);
@@ -64,6 +69,11 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, rea
                     <p className={cn("font-medium", i.status === "done" && "line-through")}>{t.name}</p>
                     <p className="text-xs text-foreground-secondary">
                       {assignee}
+                      {(() => {
+                        const p = readSendMessageParams(t.actionParams);
+                        if (t.actionType !== "send_message" || !p) return null;
+                        return <span className="text-brand"> · enverra « {mailName.get(p.templateId) ?? "mail supprimé"} » à {RECIPIENTS[p.recipient].toLowerCase()}</span>;
+                      })()}
                       {i.doneAt ? ` · ${i.status === "skipped" ? "passée" : "fait"} le ${formatDateTime(i.doneAt)}${i.doneBy ? ` par ${i.doneBy.name}` : ""}` : ""}
                     </p>
                   </div>

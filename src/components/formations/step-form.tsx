@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { FormState } from "@/lib/actions/shared";
 import { TriggerType, TriggerAnchor, ActionType } from "@/generated/prisma/enums";
 import { PHASES, TRIGGER_TYPE, TRIGGER_ANCHOR, ACTION_TYPE } from "@/lib/labels";
+import { RECIPIENTS, RECIPIENT_KEYS } from "@/lib/process/action-params";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ export type StepFormValues = {
   triggerAnchor: TriggerAnchor | null;
   triggerOffsetDays: number | null;
   actionType: ActionType;
+  messageTemplateId: string | null;
+  recipient: string | null;
 };
 
 export function StepForm({
@@ -30,6 +33,7 @@ export function StepForm({
   initial,
   users,
   roles,
+  templates,
   cancelHref,
 }: {
   mode: "create" | "edit";
@@ -37,12 +41,14 @@ export function StepForm({
   initial?: Partial<StepFormValues>;
   users: { id: string; name: string }[];
   roles: { id: string; label: string }[];
+  templates: { id: string; name: string; subject: string }[];
   cancelHref: string;
 }) {
   const [state, formAction] = useActionState(action, undefined);
   const e = state?.fieldErrors ?? {};
   const v = (key: keyof StepFormValues) => state?.values?.[key] ?? (initial?.[key] == null ? "" : String(initial[key]));
   const [triggerType, setTriggerType] = useState<string>(v("triggerType") || "manual");
+  const [actionType, setActionType] = useState<string>(v("actionType") || "checklist_only");
 
   return (
     <form action={formAction} className="max-w-2xl space-y-6">
@@ -113,8 +119,8 @@ export function StepForm({
         </FormField>
       </div>
 
-      <FormField id="actionType" label="Action" hint="Au palier 2, seule la case à cocher est active." errors={e.actionType}>
-        <NativeSelect id="actionType" name="actionType" defaultValue={v("actionType") || "checklist_only"}>
+      <FormField id="actionType" label="Action" hint="Ce que fait la plateforme quand l'étape se déclenche." errors={e.actionType}>
+        <NativeSelect id="actionType" name="actionType" value={actionType} onChange={(ev) => setActionType(ev.target.value)}>
           {Object.values(ActionType).map((a) => (
             <option key={a} value={a} disabled={Boolean(ACTION_TYPE[a].availableFrom)}>
               {ACTION_TYPE[a].label}
@@ -123,6 +129,26 @@ export function StepForm({
           ))}
         </NativeSelect>
       </FormField>
+
+      {actionType === "send_message" ? (
+        <div className="grid gap-6 rounded-lg border p-4 sm:grid-cols-2">
+          <FormField id="messageTemplateId" label="Mail à envoyer" hint={templates.length === 0 ? "Aucun template dans cette version : crée-le dans l'onglet Mails." : "Templates de cette version."} errors={e.messageTemplateId}>
+            <NativeSelect id="messageTemplateId" name="messageTemplateId" defaultValue={v("messageTemplateId")} disabled={templates.length === 0}>
+              <option value="">Choisir…</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </NativeSelect>
+          </FormField>
+          <FormField id="recipient" label="Destinataire" errors={e.recipient}>
+            <NativeSelect id="recipient" name="recipient" defaultValue={v("recipient") || "students"}>
+              {RECIPIENT_KEYS.map((k) => (
+                <option key={k} value={k}>{RECIPIENTS[k]}</option>
+              ))}
+            </NativeSelect>
+          </FormField>
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-2 pt-2">
         <SubmitButton>{mode === "edit" ? "Enregistrer" : "Ajouter l'étape"}</SubmitButton>

@@ -20,7 +20,11 @@ export default async function NewStepPage({ params, searchParams }: PageProps<"/
   const back = `/admin/formations/${id}?v=${version.versionNumber}&tab=process`;
   if (version.status !== "draft" || formation.archivedAt) redirect(back);
 
-  const [users, roles] = await Promise.all([listTrainers(), prisma.role.findMany({ select: { id: true, label: true }, orderBy: { label: "asc" } })]);
+  const [users, roles, templates] = await Promise.all([
+    listTrainers(),
+    prisma.role.findMany({ select: { id: true, label: true }, orderBy: { label: "asc" } }),
+    prisma.messageTemplate.findMany({ where: { formationVersionId: version.id, archivedAt: null }, select: { id: true, name: true, subject: true }, orderBy: { createdAt: "asc" } }),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -32,7 +36,7 @@ export default async function NewStepPage({ params, searchParams }: PageProps<"/
           { label: formation.name, href: back },
         ]}
       />
-      <StepForm mode="create" action={createStep.bind(null, version.id)} users={users} roles={roles} initial={{ assigneeUserId: formation.ownerId }} cancelHref={back} />
+      <StepForm mode="create" action={createStep.bind(null, version.id)} users={users} roles={roles} templates={templates} initial={{ assigneeUserId: formation.ownerId }} cancelHref={back} />
     </div>
   );
 }

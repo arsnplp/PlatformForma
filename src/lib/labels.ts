@@ -65,10 +65,10 @@ export const TRIGGER_ANCHOR: Record<TriggerAnchor, string> = {
   opco_agreement: "Accord OPCO reçu",
 };
 
-// Actions : seule checklist_only est active au palier 2 ; les autres arrivent aux paliers 3, 5, 6.
+// Actions actives : checklist_only et send_message. Les autres arrivent aux paliers 4, 5, 6.
 export const ACTION_TYPE: Record<ActionType, { label: string; availableFrom?: number }> = {
   checklist_only: { label: "Case à cocher" },
-  send_message: { label: "Envoyer un message", availableFrom: 3 },
+  send_message: { label: "Envoyer un message" },
   request_signature: { label: "Demander une signature", availableFrom: 5 },
   unlock_content: { label: "Débloquer du contenu", availableFrom: 4 },
   create_visio: { label: "Créer une visio", availableFrom: 6 },
