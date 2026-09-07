@@ -6,11 +6,13 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { cn } from "@/lib/utils";
 import { setStepStatus } from "@/lib/actions/steps";
+import { ExecuteStepButton } from "./execute-step-button";
+import { getMailMode, getSandboxAddress } from "@/lib/mail/config";
 import { Button } from "@/components/ui/button";
 
 // Checklist réelle d'une session (StepInstance), groupée par phase.
 // Cocher / passer / rouvrir tracent doneBy et doneAt ; rien n'est jamais supprimé.
-export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, readOnly = false }: { sessionId: string; frozenAt: string | null; sessionStatus: string; readOnly?: boolean }) {
+export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isDemoSession = false, readOnly = false }: { sessionId: string; frozenAt: string | null; sessionStatus: string; isDemoSession?: boolean; readOnly?: boolean }) {
   const instances = await prisma.stepInstance.findMany({
     where: { sessionId },
     include: {
@@ -28,6 +30,10 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, rea
   const mails = mailIds.length ? await prisma.messageTemplate.findMany({ where: { id: { in: mailIds } }, select: { id: true, name: true } }) : [];
   const mailName = new Map(mails.map((m) => [m.id, m.name]));
 
+  const mailMode = getMailMode();
+  const sandboxTo = mailMode === "production" ? null : getSandboxAddress();
+  const hasSend = instances.some((i) => i.stepTemplate.actionType === "send_message");
+
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   const byPhase = PHASES.map((p) => ({ ...p, items: instances.filter((i) => i.stepTemplate.phase === p.n) })).filter((p) => p.items.length > 0);
   const withDue = instances.filter((i) => i.dueDate).length;
@@ -35,6 +41,18 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, rea
 
   return (
     <div className="space-y-5">
+      {hasSend && !readOnly ? (
+        sandboxTo ? (
+          <p className="rounded-md bg-status-yellow-bg px-3 py-2 text-sm text-status-yellow">
+            <strong>Bac à sable</strong> — tout mail déclenché ici part vers {sandboxTo} uniquement, jamais vers un élève.
+            {isDemoSession ? " Cette session est marquée démo : aucun envoi." : ""}
+          </p>
+        ) : (
+          <p className="rounded-md bg-status-red-bg px-3 py-2 text-sm text-status-red">
+            <strong>Mode production</strong> — les mails partent réellement aux destinataires.
+          </p>
+        )
+      ) : null}
       <p className="text-sm text-foreground-secondary">
         {done} / {instances.length} étape(s) faites · {withDue} avec échéance calculée ·{" "}
         {frozenAt
@@ -82,6 +100,9 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, rea
                       {late ? "En retard · " : ""}{dueLabel}
                     </span>
                     <StatusBadge tone={late ? "red" : st.tone}>{st.label}</StatusBadge>
+                    {!readOnly && t.actionType === "send_message" && readSendMessageParams(t.actionParams) ? (
+                      <ExecuteStepButton instanceId={i.id} disabled={isDemoSession} />
+                    ) : null}
                     {!readOnly ? (
                       <span className="inline-flex items-center gap-0.5">
                         {i.status !== "done" ? (
