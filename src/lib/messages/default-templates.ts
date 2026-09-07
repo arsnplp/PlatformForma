@@ -1,5 +1,7 @@
 // Templates de mails par défaut, proposés avec le process standard.
 // Rédaction initiale : à corriger librement dans l'interface.
+// {{#si cle}}…{{/si}} entoure ce qui dépend d'un champ facultatif (entreprise
+// cliente, durée) : le fragment disparaît proprement si le champ est vide.
 // Mentions Qualiopi / OPCO couvertes : intitulé, dates, durée, modalité FOAD,
 // modalités d'accès et prérequis techniques, contact référent, accessibilité
 // handicap, délai de rétractation le cas échéant.
@@ -11,7 +13,7 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     subject: "Convocation — {{formation.nom}} du {{session.date_debut}} au {{session.date_fin}}",
     body: `Bonjour {{eleve.prenom}},
 
-Vous êtes convoqué(e) à la formation **{{formation.nom}}**, organisée pour {{entreprise.nom}}.
+Vous êtes convoqué(e) à la formation **{{formation.nom}}**{{#si entreprise.nom}}, organisée pour {{entreprise.nom}}{{/si}}.
 
 ## Informations pratiques
 
@@ -19,8 +21,8 @@ Vous êtes convoqué(e) à la formation **{{formation.nom}}**, organisée pour {
 - **Session** : {{session.nom}}
 - **Dates** : du {{session.date_debut}} au {{session.date_fin}}
 - **Horaires** : 9h00 – 12h30 et 13h30 – 17h00
-- **Durée totale** : {{session.duree_heures}} heures
-- **Modalité** : formation ouverte et à distance (FOAD), en classe virtuelle
+{{#si session.duree_heures}}- **Durée totale** : {{session.duree_heures}} heures
+{{/si}}- **Modalité** : formation ouverte et à distance (FOAD), en classe virtuelle
 - **Lieu** : à distance, depuis votre poste de travail ou votre domicile
 
 ## Modalités d'accès
@@ -86,7 +88,7 @@ Votre **attestation de fin de formation** et votre **certificat de réalisation*
 
 {{lien_espace_eleve}}
 
-Ils mentionnent l'intitulé ({{formation.nom}}), les dates (du {{session.date_debut}} au {{session.date_fin}}), la durée ({{session.duree_heures}} heures) et la modalité à distance (FOAD) de la formation suivie.
+Ils mentionnent l'intitulé ({{formation.nom}}), les dates (du {{session.date_debut}} au {{session.date_fin}}){{#si session.duree_heures}}, la durée ({{session.duree_heures}} heures){{/si}} et la modalité à distance (FOAD) de la formation suivie.
 
 ## Évaluation finale et bilan
 

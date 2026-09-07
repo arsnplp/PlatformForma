@@ -1,6 +1,6 @@
 import "server-only";
 
-import { renderVariables } from "./variables";
+import { renderVariables, renderConditionals } from "./variables";
 import { markdownToHtml } from "./markdown";
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "Europe/Paris" });
@@ -40,8 +40,8 @@ export function buildValues(ctx: MessageContext): Record<string, string> {
 
 // Markdown + variables → objet, HTML (enveloppe sobre) et texte brut.
 export function renderMessage(template: { subject: string; body: string }, values: Record<string, string>) {
-  const subject = renderVariables(template.subject, values);
-  const markdown = renderVariables(template.body, values);
+  const subject = renderVariables(renderConditionals(template.subject, values), values);
+  const markdown = renderVariables(renderConditionals(template.body, values), values);
   const inner = markdownToHtml(markdown);
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;background:#f7f7f5;padding:24px 12px;">

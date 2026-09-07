@@ -3,7 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import type { FormState } from "@/lib/actions/shared";
-import { MESSAGE_VARIABLES, SAMPLE_VALUES, renderVariables } from "@/lib/messages/variables";
+import { MESSAGE_VARIABLES, SAMPLE_VALUES, renderVariables, renderConditionals } from "@/lib/messages/variables";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,11 @@ export function MessageTemplateForm({
         <section>
           <h2 className="text-sm font-semibold">Variables</h2>
           <p className="mt-1 text-xs text-foreground-secondary">Remplacées à l&apos;envoi par les données réelles.</p>
+          <p className="mt-2 rounded-md bg-surface px-2 py-1.5 text-xs text-foreground-secondary">
+            Champ facultatif ? Entoure le passage qui en dépend :{" "}
+            <span className="font-mono text-brand">{"{{#si entreprise.nom}}"}</span> … <span className="font-mono text-brand">{"{{/si}}"}</span>. Il disparaît
+            si le champ est vide, au lieu de laisser une phrase bancale. L&apos;aperçu montre le cas où il est rempli.
+          </p>
           <ul className="mt-3 space-y-1">
             {MESSAGE_VARIABLES.map((v) => (
               <li key={v.key}>
@@ -123,7 +128,7 @@ export function MessageTemplateForm({
           <div className="mt-3 rounded-lg border">
             <p className="border-b px-3 py-2 text-xs">
               <span className="text-foreground-tertiary">Objet : </span>
-              <span className="font-medium">{renderVariables(subject, SAMPLE_VALUES) || "—"}</span>
+              <span className="font-medium">{renderVariables(renderConditionals(subject, SAMPLE_VALUES), SAMPLE_VALUES) || "—"}</span>
             </p>
             <div
               className={cn(
@@ -134,7 +139,7 @@ export function MessageTemplateForm({
                 "[&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5",
                 "[&_a]:text-brand [&_a]:underline [&_code]:rounded [&_code]:bg-surface [&_code]:px-1",
               )}
-              dangerouslySetInnerHTML={{ __html: previewHtml(renderVariables(body, SAMPLE_VALUES)) }}
+              dangerouslySetInnerHTML={{ __html: previewHtml(renderVariables(renderConditionals(body, SAMPLE_VALUES), SAMPLE_VALUES)) }}
             />
           </div>
         </section>

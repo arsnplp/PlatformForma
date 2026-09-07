@@ -44,6 +44,12 @@ Ce principe gouverne le versioning, le soft-delete et la conformité audit (Qual
 **Le tenir à jour** : dès qu'un palier introduit une variable d'environnement, un
 secret, une tâche planifiée ou une bascule manuelle, ajouter la ligne correspondante.
 
+## Améliorations reportées
+
+`AMELIORATIONS.md` recense les idées validées mais repoussées hors du palier en
+cours. **Le tenir à jour** : quand une idée est écartée « pour plus tard », elle
+y va avec sa raison et ses implications ; quand elle est traitée, elle en sort.
+
 ## Méthode de travail — palier par palier (spec §13)
 
 - On avance **palier par palier** (1 Fondations → 2 Moteur de checklist → 3 Automatisation → 4 Espace élève → 5 Signature + GED → 6 Visio → 7 Logs & analytics). Chaque palier livre un outil utilisable.
