@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { MAX_HEARTBEAT_SECONDS } from "@/lib/activity/config";
+import { todayInParis } from "@/lib/process/today";
 
 const beatSchema = z.object({
   sessionId: z.string().uuid(),
@@ -42,14 +43,28 @@ export async function recordHeartbeat(input: BeatInput): Promise<{ ok: boolean; 
     moduleId = lesson.moduleId;
   }
 
-  await prisma.activityLog.create({
-    data: {
-      userId: me.id, sessionId, moduleId, lessonId: lessonId ?? null, exerciseId: exerciseId ?? null,
-      eventType: "heartbeat",
-      durationSeconds: seconds,
-      isDemo: enrollment.session.isDemo,
-    },
-  });
+  // Le jour du relevé est le jour civil FRANÇAIS : un élève qui travaille à
+  // 23h30 doit apparaître sur la bonne journée dans la preuve FOAD.
+  const day = todayInParis();
+
+  // Le battement brut ET son agrégat partent ensemble : le relevé est ainsi
+  // toujours à jour, sans tâche périodique à programmer ni à surveiller.
+  await prisma.$transaction([
+    prisma.activityLog.create({
+      data: {
+        userId: me.id, sessionId, moduleId, lessonId: lessonId ?? null, exerciseId: exerciseId ?? null,
+        eventType: "heartbeat",
+        durationSeconds: seconds,
+        isDemo: enrollment.session.isDemo,
+      },
+    }),
+    ...accumulate({ userId: me.id, sessionId, day, seconds, scopes: [
+      { type: "session" as const, id: sessionId },
+      ...(moduleId ? [{ type: "module" as const, id: moduleId }] : []),
+      ...(lessonId ? [{ type: "lesson" as const, id: lessonId }] : []),
+      ...(exerciseId ? [{ type: "exercise" as const, id: exerciseId }] : []),
+    ] }),
+  ]);
 
   return { ok: true, seconds };
 }
@@ -62,4 +77,32 @@ export async function getMyLessonSeconds(sessionId: string, lessonId: string): P
     _sum: { durationSeconds: true },
   });
   return total._sum.durationSeconds ?? 0;
+}
+
+// Un battement alimente plusieurs totaux à la fois : la session, le module, la
+// leçon, et l'exercice le cas échéant. Chaque total est propre à un jour, ce
+// qui donne directement le relevé « par élève et par jour » attendu par l'OPCO.
+function accumulate(params: {
+  userId: string;
+  sessionId: string;
+  day: Date;
+  seconds: number;
+  scopes: { type: "session" | "module" | "lesson" | "exercise"; id: string }[];
+}) {
+  return params.scopes.map((scope) =>
+    prisma.timeAggregate.upsert({
+      where: {
+        userId_sessionId_scopeType_scopeId_day: {
+          userId: params.userId, sessionId: params.sessionId,
+          scopeType: scope.type, scopeId: scope.id, day: params.day,
+        },
+      },
+      create: {
+        userId: params.userId, sessionId: params.sessionId,
+        scopeType: scope.type, scopeId: scope.id, day: params.day,
+        totalSeconds: params.seconds,
+      },
+      update: { totalSeconds: { increment: params.seconds } },
+    }),
+  );
 }

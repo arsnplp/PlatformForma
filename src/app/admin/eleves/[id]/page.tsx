@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { ResendInvitation } from "@/components/admin/resend-invitation";
+import { StudentTime } from "@/components/admin/student-time";
 import { DocumentList } from "@/components/documents/document-list";
 import { DocumentUpload } from "@/components/documents/document-upload";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -129,6 +130,29 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
               })}
             </TableBody>
           </Table>
+        )}
+      </section>
+
+      {/* ─── Temps de connexion (preuve FOAD) ───────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Temps de connexion</h2>
+        <p className="-mt-2 text-sm text-foreground-secondary">
+          Mesuré hors inactivité et onglet en arrière-plan. Le relevé par jour est la preuve d&apos;assiduité
+          attendue en formation à distance.
+        </p>
+        {student.enrollments.length === 0 ? (
+          <EmptyState title="Aucune inscription" />
+        ) : (
+          <div className="space-y-3">
+            {student.enrollments.map((enrollment) => (
+              <StudentTime
+                key={enrollment.id}
+                sessionId={enrollment.session.id}
+                userId={student.id}
+                sessionName={enrollment.session.name}
+              />
+            ))}
+          </div>
         )}
       </section>
 
