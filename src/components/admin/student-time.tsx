@@ -1,6 +1,7 @@
 import { getStudentSessionTime } from "@/lib/queries/time";
 import { formatSeconds } from "@/lib/activity/config";
 import { GenerateTimeSheet } from "./generate-time-sheet";
+import { StudentActivityTools } from "./student-activity-tools";
 
 const dayFmt = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
@@ -10,10 +11,16 @@ export async function StudentTime({
   sessionId,
   userId,
   sessionName,
+  isDemo,
+  canGenerate,
 }: {
   sessionId: string;
   userId: string;
   sessionName: string;
+  isDemo: boolean;
+  /// Outils de fabrication : super-administrateur seulement, et le serveur
+  /// revérifie de toute façon à chaque appel.
+  canGenerate: boolean;
 }) {
   const report = await getStudentSessionTime(sessionId, userId);
 
@@ -28,6 +35,17 @@ export async function StudentTime({
         </p>
         <GenerateTimeSheet sessionId={sessionId} userId={userId} />
       </div>
+
+      {canGenerate && isDemo ? (
+        <div className="rounded-md bg-status-orange-bg/40 px-3 py-2">
+          <p className="text-xs font-medium text-status-orange">
+            Session de démonstration — activité fabriquée, sans valeur de mesure
+          </p>
+          <div className="mt-2">
+            <StudentActivityTools sessionId={sessionId} userId={userId} />
+          </div>
+        </div>
+      ) : null}
 
       {report.days.length === 0 ? (
         <p className="text-sm text-foreground-tertiary">Aucune connexion enregistrée pour l&apos;instant.</p>

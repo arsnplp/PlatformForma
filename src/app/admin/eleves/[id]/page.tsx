@@ -150,6 +150,8 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
                 sessionId={enrollment.session.id}
                 userId={student.id}
                 sessionName={enrollment.session.name}
+                isDemo={enrollment.session.isDemo}
+                canGenerate={hasPermission(me, "can_generate_demo_data")}
               />
             ))}
           </div>
