@@ -11,6 +11,11 @@ export const SUBMISSION_BUCKET = "submissions";
 // conservation et des droits plus stricts que les supports de cours.
 export const DOCUMENT_BUCKET = "documents";
 
+// Pièces échangées dans un fil de discussion. À part des pièces du dossier :
+// une photo envoyée dans le chat n'est pas une preuve d'audit, elle n'a ni
+// classement ni durée de conservation réglementaire.
+export const MESSAGE_BUCKET = "messages";
+
 export const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 Mo
 
 // Types acceptés. Le SVG est volontairement exclu : il peut porter du script.
@@ -68,6 +73,18 @@ export const SUBMISSION_TYPES: readonly string[] = [
 
 export function isAllowedSubmissionType(mimeType: string): boolean {
   return SUBMISSION_TYPES.includes(mimeType);
+}
+
+// Pièces jointes d'un message : mêmes formats qu'un livrable, sans archive —
+// on doit pouvoir ouvrir ce qu'on reçoit dans une conversation.
+export const MESSAGE_TYPES: readonly string[] = [
+  ...ALLOWED_TYPES.image,
+  ...ALLOWED_TYPES.pdf,
+  ...ALLOWED_TYPES.document,
+];
+
+export function isAllowedMessageType(mimeType: string): boolean {
+  return MESSAGE_TYPES.includes(mimeType);
 }
 
 export function kindOf(mimeType: string): FileKind | null {

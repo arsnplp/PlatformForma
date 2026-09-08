@@ -70,3 +70,61 @@ export async function unreadConversationIds(conversationIds: string[], userId: s
   }
   return unread;
 }
+
+// Messages non lus, par fil : ceux d'un autre, postérieurs à la dernière
+// ouverture. Une seule requête, quelle que soit le nombre de fils — chaque
+// fil a sa propre date de lecture, d'où le OR construit branche par branche.
+async function unreadCounts(conversationIds: string[], userId: string): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (conversationIds.length === 0) return counts;
+
+  const reads = await prisma.conversationRead.findMany({
+    where: { userId, conversationId: { in: conversationIds } },
+    select: { conversationId: true, readAt: true },
+  });
+  const readAt = new Map(reads.map((r) => [r.conversationId, r.readAt]));
+
+  const rows = await prisma.message.groupBy({
+    by: ["conversationId"],
+    where: {
+      senderId: { not: userId },
+      OR: conversationIds.map((id) => {
+        const seen = readAt.get(id);
+        return seen ? { conversationId: id, sentAt: { gt: seen } } : { conversationId: id };
+      }),
+    },
+    _count: { _all: true },
+  });
+  for (const row of rows) counts.set(row.conversationId, row._count._all);
+  return counts;
+}
+
+// Total pour la pastille de la navigation.
+export async function countUnreadMessages(me: CurrentUser): Promise<number> {
+  // Élève : ses fils. Encadrement : ceux des sessions qu'il possède ou anime.
+  // Superviseur : tous, comme pour le reste de sa supervision.
+  const where = canSupervise(me)
+    ? {}
+    : { OR: [{ userId: me.id }, { session: { OR: [{ ownerId: me.id }, { trainerId: me.id }] } }] };
+
+  const conversations = await prisma.conversation.findMany({ where, select: { id: true } });
+  const counts = await unreadCounts(conversations.map((c) => c.id), me.id);
+  return [...counts.values()].reduce((n, c) => n + c, 0);
+}
+
+// Non lus par session, pour l'élève : la pastille se pose sur la bonne
+// formation, pas sur un total anonyme.
+export async function unreadBySession(userId: string, sessionIds: string[]): Promise<Map<string, number>> {
+  if (sessionIds.length === 0) return new Map();
+  const conversations = await prisma.conversation.findMany({
+    where: { userId, sessionId: { in: sessionIds } },
+    select: { id: true, sessionId: true },
+  });
+  const counts = await unreadCounts(conversations.map((c) => c.id), userId);
+  const bySession = new Map<string, number>();
+  for (const c of conversations) {
+    const n = counts.get(c.id) ?? 0;
+    if (n > 0) bySession.set(c.sessionId, n);
+  }
+  return bySession;
+}

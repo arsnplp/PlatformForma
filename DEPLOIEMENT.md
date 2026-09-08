@@ -52,7 +52,11 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 - [ ] **Créer le bucket privé `submissions`** (livrables d'élèves), lui aussi
       **non public**. Accès par `/api/livrables/[submissionId]` : seuls l'auteur
       et le formateur de la session, jamais les autres élèves.
-- [ ] Prévoir la sauvegarde des deux buckets : les fichiers ne sont pas dans la
+- [ ] **Créer le bucket privé `messages`** (pièces jointes des conversations),
+      **non public**. L'application le crée au premier envoi si le rôle service
+      en a le droit ; le créer à la main évite d'en dépendre. Accès par
+      `/api/messages/[messageId]/fichier` : les mêmes personnes que le fil.
+- [ ] Prévoir la sauvegarde de ces buckets : les fichiers ne sont pas dans la
       base et ne sont donc pas couverts par les sauvegardes Postgres.
 - [ ] **Rétention des livrables** : définir une durée de conservation des copies
       d'élèves (RGPD), distincte de celle des documents Qualiopi.

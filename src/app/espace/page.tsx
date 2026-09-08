@@ -5,11 +5,15 @@ import { ENROLLMENT_STATUS, SESSION_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { UnreadBadge } from "@/components/admin/unread-badge";
+import { unreadBySession } from "@/lib/queries/conversations";
 
 // « Mes formations » : une carte par inscription (spec §11).
 export default async function EspacePage() {
   const me = await requireUser("/espace");
   const enrollments = await listMyEnrollments(me.id);
+  // Une pastille sur la formation dont le fil attend une lecture.
+  const unread = await unreadBySession(me.id, enrollments.map((e) => e.session.id));
 
   return (
     <div className="space-y-8">
@@ -42,7 +46,10 @@ export default async function EspacePage() {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium">{fv.formation.name}</p>
+                      <p className="flex items-center gap-2 font-medium">
+                        {fv.formation.name}
+                        <UnreadBadge count={unread.get(s.id) ?? 0} />
+                      </p>
                       <p className="mt-0.5 text-sm text-foreground-secondary">
                         {s.name}
                         {s.company ? ` · ${s.company.name}` : ""}

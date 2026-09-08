@@ -7,6 +7,8 @@ import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { BlockView } from "@/components/content/block-view";
+import { UnreadBadge } from "@/components/admin/unread-badge";
+import { unreadBySession } from "@/lib/queries/conversations";
 
 // Programme d'une session : l'arbre figé de sa version (spec §11).
 export default async function SessionProgramPage({ params }: PageProps<"/espace/sessions/[sessionId]">) {
@@ -21,6 +23,7 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
   const ss = SESSION_STATUS[session.status];
   const lessons = fv.modules.reduce((n, m) => n + m.lessons.length, 0);
   const firstLesson = fv.modules.flatMap((m) => m.lessons)[0] ?? null;
+  const unread = (await unreadBySession(me.id, [sessionId])).get(sessionId) ?? 0;
 
   return (
     <div className="space-y-8">
@@ -42,8 +45,12 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
           <p className="mt-2 text-foreground-secondary">{fv.formation.description}</p>
         ) : null}
         <p className="mt-3 flex flex-wrap gap-4 text-sm">
-          <Link href={`/espace/sessions/${sessionId}/messages`} className="font-medium text-brand hover:underline">
+          <Link
+            href={`/espace/sessions/${sessionId}/messages`}
+            className="flex items-center gap-1.5 font-medium text-brand hover:underline"
+          >
             Messages avec mon formateur →
+            <UnreadBadge count={unread} />
           </Link>
           <Link href={`/espace/sessions/${sessionId}/plan`} className="font-medium text-brand hover:underline">
             Plan de formation →
