@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { RunCronPanel } from "@/components/admin/run-cron-panel";
+import { RunNotificationsPanel } from "@/components/admin/run-notifications-panel";
 import { RetryExecutionButton } from "@/components/admin/retry-execution-button";
 
 const STATUS = {
@@ -47,7 +48,12 @@ export default async function EnvoisPage() {
         description="Ce que la plateforme a envoyé à ta place : quand, pour quelle étape, vers qui, et avec quel résultat."
       />
 
-      {supervisor ? <RunCronPanel sandbox={mode !== "production"} sandboxTo={sandboxTo} /> : null}
+      {supervisor ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RunCronPanel sandbox={mode !== "production"} sandboxTo={sandboxTo} />
+          <RunNotificationsPanel />
+        </div>
+      ) : null}
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Journal</h2>

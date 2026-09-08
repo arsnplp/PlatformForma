@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/mail/send";
 import { renderMessage } from "@/lib/messages/render";
 import { INVITATION_TEMPLATE } from "@/lib/messages/invitation";
+import { appUrl } from "@/lib/app-url";
 
 // Invitation d'un élève (spec §4) : on ne transmet JAMAIS de mot de passe.
 // Supabase génère un jeton à usage unique, on n'en garde que la forme hachée
@@ -12,10 +13,6 @@ import { INVITATION_TEMPLATE } from "@/lib/messages/invitation";
 // donc le bac à sable s'applique comme à tout le reste.
 
 const firstName = (full: string) => full.trim().split(/\s+/)[0] ?? full;
-
-function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
-}
 
 export type InvitationResult = { ok: true; sentTo: string; sandbox: boolean } | { ok: false; error: string };
 
@@ -27,7 +24,7 @@ async function buildActivationLink(email: string): Promise<{ link: string } | { 
   if (error || !data?.properties?.hashed_token) {
     return { error: error?.message ?? "Lien d'activation impossible à générer." };
   }
-  const url = new URL("/auth/activation", appUrl());
+  const url = new URL(appUrl("/auth/activation"));
   url.searchParams.set("token_hash", data.properties.hashed_token);
   return { link: url.toString() };
 }

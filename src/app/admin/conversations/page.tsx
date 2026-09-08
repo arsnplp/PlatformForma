@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { canSupervise } from "@/lib/auth/ownership";
+import { unreadConversationIds } from "@/lib/queries/conversations";
 import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -27,6 +28,8 @@ export default async function ConversationsInboxPage() {
     take: 200,
   });
 
+  const unread = await unreadConversationIds(conversations.map((c) => c.id), me.id);
+
   // Tri applicatif : la date du dernier message n'est pas une colonne du fil.
   const rows = conversations
     .map((c) => ({ ...c, last: c.messages[0] ?? null }))
@@ -44,7 +47,7 @@ export default async function ConversationsInboxPage() {
       ) : (
         <ol className="divide-y rounded-md border">
           {rows.map((c) => {
-            const waiting = c.last?.senderId === c.userId;
+            const waiting = unread.has(c.id);
             const excerpt = c.last ? c.last.body.replace(/[*_#>`]/g, " ").replace(/\s+/g, " ").trim().slice(0, 120) : null;
             return (
               <li key={c.id}>

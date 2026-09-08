@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, hasPermission } from "@/lib/auth/session";
-import { checkConversationAccess } from "@/lib/queries/conversations";
+import { checkConversationAccess, markConversationRead } from "@/lib/queries/conversations";
 import { formatDate } from "@/lib/format";
 import { SESSION_STATUS } from "@/lib/labels";
 import { PageHeader } from "@/components/admin/page-header";
@@ -31,6 +31,8 @@ export default async function ConversationPage({ params }: PageProps<"/admin/con
       },
     },
   });
+  await markConversationRead(conversation.id, me.id);
+
   const s = conversation.session;
   const ss = SESSION_STATUS[s.status];
 

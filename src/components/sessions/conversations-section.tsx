@@ -4,6 +4,8 @@ import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { openConversation } from "@/lib/actions/conversations";
+import { unreadConversationIds } from "@/lib/queries/conversations";
+import { requireUser } from "@/lib/auth/session";
 
 // Un fil par élève et par session. Les fils sont créés à la volée : par le
 // moteur de process au premier mail, ou ici au premier message du formateur.
@@ -27,6 +29,8 @@ export async function ConversationsSection({ sessionId }: { sessionId: string })
     },
   });
   const byUser = new Map(conversations.map((c) => [c.userId, c]));
+  const me = await requireUser();
+  const unread = await unreadConversationIds(conversations.map((c) => c.id), me.id);
 
   return (
     <ol className="divide-y rounded-md border">
@@ -46,8 +50,8 @@ export async function ConversationsSection({ sessionId }: { sessionId: string })
           );
         }
         const last = conv.messages[0] ?? null;
-        // « À lire » : le dernier mot est celui de l'élève.
-        const waiting = last?.senderId === user.id;
+        // « À lire » : un message que je n'ai pas encore ouvert.
+        const waiting = unread.has(conv.id);
         const excerpt = last ? last.body.replace(/[*_#>`]/g, " ").replace(/\s+/g, " ").trim().slice(0, 110) : null;
         return (
           <li key={user.id}>

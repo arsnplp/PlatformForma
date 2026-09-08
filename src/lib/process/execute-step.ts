@@ -5,6 +5,7 @@ import { readSendMessageParams } from "./action-params";
 import { buildValues, renderMessage } from "@/lib/messages/render";
 import { sendMail } from "@/lib/mail/send";
 import { isSandbox, getSandboxAddress } from "@/lib/mail/config";
+import { appUrl } from "@/lib/app-url";
 
 export type ExecutionReport = {
   ok: boolean;
@@ -17,7 +18,7 @@ export type ExecutionReport = {
 };
 
 function studentSpaceUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000") + "/espace";
+  return appUrl("/espace");
 }
 
 // Exécute l'action d'une StepInstance. Palier 3 : seule `send_message`.

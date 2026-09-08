@@ -28,6 +28,12 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       7h Paris = 5h UTC l'été (CEST), 6h UTC l'hiver (CET) : si l'ordonnanceur ne gère
       que l'UTC, prévoir deux entrées ou un décalage assumé. Le code, lui, compare
       déjà les échéances au calendrier de Paris.
+- [ ] **Programmer le passage des notifications toutes les 15 minutes** :
+      `POST https://<domaine>/api/cron/notifications`, même en-tête
+      `Authorization: Bearer $CRON_SECRET`. Il prévient par mail qui n'a pas lu
+      ses messages de fil. Sans lui, les fils fonctionnent toujours, mais
+      personne n'est prévenu : les messages attendent la prochaine connexion.
+      Aucune heure particulière, aucun fuseau à gérer.
 - [ ] **Remplacer `CRON_SECRET`** par une valeur aléatoire forte
       (`openssl rand -hex 32`). La valeur actuelle est une valeur de développement.
 - [ ] Vérifier après le premier passage réel que le journal (menu **Envois**) affiche

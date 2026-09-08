@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getSessionAccess } from "@/lib/queries/student-space";
-import { ensureConversation } from "@/lib/queries/conversations";
+import { ensureConversation, markConversationRead } from "@/lib/queries/conversations";
 import { prisma } from "@/lib/prisma";
 import { MessageThread } from "@/components/content/message-thread";
 
@@ -40,6 +40,7 @@ export default async function StudentMessagesPage({ params }: PageProps<"/espace
   }
 
   const conversation = await ensureConversation(sessionId, me.id);
+  await markConversationRead(conversation.id, me.id);
 
   return (
     <div className="space-y-6">
