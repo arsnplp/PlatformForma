@@ -7,23 +7,30 @@ import { readSubmissionFiles } from "@/lib/content/submission-payload";
 import { formatBytes } from "@/lib/storage/config";
 import Link from "next/link";
 import { StatusBadge } from "@/components/admin/status-badge";
+import type { ExerciseTarget } from "@/lib/actions/exercises";
 
 type Content = { grade?: { score: number; max: number; details: GradeDetail[] } | null };
 
-// Exercices d'une leçon, côté élève : soit le formulaire, soit le résultat.
+// Exercices d'une leçon ou d'un module, côté élève : soit le formulaire,
+// soit le résultat. Un exercice de module est l'évaluation de fin de module.
 export async function StudentExercises({
-  lessonId,
+  target,
   sessionId,
   userId,
   readOnly,
+  heading,
 }: {
-  lessonId: string;
+  target: ExerciseTarget;
   sessionId: string;
   userId: string;
   /// Vrai en aperçu formateur : on montre les exercices sans permettre de répondre.
   readOnly: boolean;
+  heading?: string;
 }) {
-  const exercises = await prisma.exercise.findMany({ where: { lessonId }, orderBy: { order: "asc" } });
+  const exercises = await prisma.exercise.findMany({
+    where: target.lessonId ? { lessonId: target.lessonId } : { moduleId: target.moduleId },
+    orderBy: { order: "asc" },
+  });
   if (exercises.length === 0) return null;
 
   const submissions = await prisma.submission.findMany({
@@ -33,7 +40,7 @@ export async function StudentExercises({
 
   return (
     <section className="space-y-5 border-t pt-6">
-      <h2 className="text-xl font-semibold">Exercices</h2>
+      <h2 className="text-xl font-semibold">{heading ?? "Exercices"}</h2>
       {exercises.map((e) => {
         const done = byExercise.get(e.id);
         const parsed = parseConfig(e.type, e.config);

@@ -32,7 +32,7 @@ export default async function NewExercisePage({ params }: PageProps<"/admin/form
           { label: lesson.title, href: back },
         ]}
       />
-      <ExerciseForm action={createExercise.bind(null, lessonId)} cancelHref={back} submitLabel="Créer l'exercice" />
+      <ExerciseForm action={createExercise.bind(null, { lessonId })} cancelHref={back} submitLabel="Créer l'exercice" />
     </div>
   );
 }

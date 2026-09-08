@@ -66,6 +66,7 @@ export function getSessionProgram(sessionId: string) {
                 orderBy: { order: "asc" },
                 select: { id: true, order: true, title: true, _count: { select: { contentBlocks: true } } },
               },
+              _count: { select: { exercises: true } },
             },
           },
         },
@@ -112,4 +113,19 @@ export async function getLessonForSession(sessionId: string, lessonId: string) {
     position: index + 1,
     total: flat.length,
   };
+}
+
+// Un module, si celui-ci appartient bien à la version de la session : c'est
+// là que vivent les exercices de fin de module.
+export async function getModuleForSession(sessionId: string, moduleId: string) {
+  const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { formationVersionId: true } });
+  if (!session) return null;
+
+  return prisma.module.findFirst({
+    where: { id: moduleId, formationVersionId: session.formationVersionId },
+    include: {
+      lessons: { orderBy: { order: "asc" }, select: { id: true, order: true, title: true } },
+      formationVersion: { select: { formation: { select: { name: true } } } },
+    },
+  });
 }

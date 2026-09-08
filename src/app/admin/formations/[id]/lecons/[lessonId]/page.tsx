@@ -87,7 +87,7 @@ export default async function LessonPage({ params }: PageProps<"/admin/formation
         )}
       </article>
 
-      <ExerciseList formationId={id} lessonId={lesson.id} editable={editable} />
+      <ExerciseList formationId={id} target={{ lessonId: lesson.id }} editable={editable} />
 
       <nav className="flex items-center justify-between gap-3 border-t pt-4 text-sm">
         {previous ? (

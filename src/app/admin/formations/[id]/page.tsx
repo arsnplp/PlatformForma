@@ -29,6 +29,7 @@ import { ConfirmButton } from "@/components/admin/confirm-button";
 import { NewVersionForm } from "@/components/formations/new-version-form";
 import { ProcessSection } from "@/components/formations/process-section";
 import { MailsSection } from "@/components/formations/mails-section";
+import { ExerciseList } from "@/components/content/exercise-list";
 
 export default async function FormationPage({ params, searchParams }: PageProps<"/admin/formations/[id]">) {
   const { id } = await params;
@@ -283,6 +284,10 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                         <Button type="submit" variant="outline" size="sm">Ajouter</Button>
                       </form>
                     ) : null}
+                    {/* Évaluation de fin de module : elle ne pend à aucune leçon. */}
+                    <div className="mt-4 border-t pt-3 pl-6">
+                      <ExerciseList formationId={formation.id} target={{ moduleId: m.id }} editable={canEditContent} compact />
+                    </div>
                   </li>
                 ))}
               </ol>

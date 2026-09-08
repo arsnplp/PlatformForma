@@ -92,7 +92,7 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
         )}
       </article>
 
-      <StudentExercises lessonId={lesson.id} sessionId={sessionId} userId={me.id} readOnly={access.role === "preview"} />
+      <StudentExercises target={{ lessonId: lesson.id }} sessionId={sessionId} userId={me.id} readOnly={access.role === "preview"} />
 
       <nav className="flex items-center justify-between gap-3 border-t pt-5 text-sm">
         {previous ? (

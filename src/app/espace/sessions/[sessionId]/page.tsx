@@ -100,6 +100,20 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
                         </Link>
                       </li>
                     ))}
+                    {m._count.exercises > 0 ? (
+                      <li>
+                        <Link
+                          href={`/espace/sessions/${sessionId}/modules/${m.id}`}
+                          className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface"
+                        >
+                          <span>
+                            <span className="mr-2 font-mono text-xs text-foreground-tertiary">✎</span>
+                            Fin de module · {m._count.exercises} exercice(s)
+                          </span>
+                          <span className="shrink-0 text-xs text-foreground-tertiary">Faire →</span>
+                        </Link>
+                      </li>
+                    ) : null}
                   </ol>
                 )}
               </section>

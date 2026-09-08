@@ -1,42 +1,58 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { removeExercise, moveExercise } from "@/lib/actions/exercises";
+import { removeExercise, moveExercise, type ExerciseTarget } from "@/lib/actions/exercises";
 import { EXERCISE_TYPES } from "@/lib/content/exercise-config";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 
-// Exercices d'une leçon : ils suivent le contenu, dans leur ordre (spec §8.2).
+// Exercices d'une leçon ou d'un module, dans leur ordre (spec §8.2).
+// Un exercice de module est l'évaluation de fin de module : même formulaire,
+// même correction, seul le point d'attache change.
 export async function ExerciseList({
   formationId,
-  lessonId,
+  target,
   editable,
+  compact = false,
 }: {
   formationId: string;
-  lessonId: string;
+  target: ExerciseTarget;
   editable: boolean;
+  /// Version resserrée, pour s'insérer dans l'arbre d'une formation.
+  compact?: boolean;
 }) {
+  const isLesson = Boolean(target.lessonId);
   const exercises = await prisma.exercise.findMany({
-    where: { lessonId },
+    where: isLesson ? { lessonId: target.lessonId } : { moduleId: target.moduleId },
     orderBy: { order: "asc" },
     include: { _count: { select: { submissions: true } } },
   });
 
   if (exercises.length === 0 && !editable) return null;
 
+  const basePath = isLesson
+    ? `/admin/formations/${formationId}/lecons/${target.lessonId}/exercices`
+    : `/admin/formations/${formationId}/modules/${target.moduleId}/exercices`;
+  const heading = isLesson ? "Exercices" : "Exercices de fin de module";
+  const emptyLabel = isLesson ? "Aucun exercice dans cette leçon." : "Aucun exercice de fin de module.";
+
   return (
-    <section className="space-y-3">
+    <section className={compact ? "space-y-2" : "space-y-3"}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-semibold">Exercices</h2>
+        {compact ? (
+          <p className="text-xs font-medium text-foreground-secondary">{heading}</p>
+        ) : (
+          <h2 className="text-xl font-semibold">{heading}</h2>
+        )}
         {editable ? (
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/admin/formations/${formationId}/lecons/${lessonId}/exercices/nouveau`}>Nouvel exercice</Link>
+          <Button asChild variant="outline" size={compact ? "sm" : "default"} className={compact ? "h-7" : undefined}>
+            <Link href={`${basePath}/nouveau`}>{compact ? "Ajouter un exercice" : "Nouvel exercice"}</Link>
           </Button>
         ) : null}
       </div>
 
       {exercises.length === 0 ? (
-        <p className="text-sm text-foreground-tertiary">Aucun exercice dans cette leçon.</p>
+        <p className={compact ? "text-xs text-foreground-tertiary" : "text-sm text-foreground-tertiary"}>{emptyLabel}</p>
       ) : (
         <ol className="divide-y rounded-md border">
           {exercises.map((e, i) => {
@@ -62,7 +78,7 @@ export async function ExerciseList({
                       <Button type="submit" variant="ghost" size="sm" className="h-7 px-2" disabled={i === exercises.length - 1} aria-label="Descendre">↓</Button>
                     </form>
                     <Button asChild variant="ghost" size="sm" className="h-7">
-                      <Link href={`/admin/formations/${formationId}/lecons/${lessonId}/exercices/${e.id}`}>Modifier</Link>
+                      <Link href={`${basePath}/${e.id}`}>Modifier</Link>
                     </Button>
                     <ConfirmButton
                       action={removeExercise.bind(null, e.id)}
