@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CONTENT_BUCKET, SUBMISSION_BUCKET } from "./config";
+import { CONTENT_BUCKET, SUBMISSION_BUCKET, DOCUMENT_BUCKET } from "./config";
 
 // Le bucket est PRIVÉ : aucune URL publique n'existe. Chaque lecture passe par
 // une URL signée de courte durée, délivrée seulement après vérification des
@@ -45,4 +45,8 @@ export async function ensureContentBucket() {
 
 export async function ensureSubmissionBucket() {
   return ensureBucket(SUBMISSION_BUCKET);
+}
+
+export async function ensureDocumentBucket() {
+  return ensureBucket(DOCUMENT_BUCKET);
 }

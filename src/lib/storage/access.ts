@@ -106,3 +106,52 @@ export async function canGradeSubmission(submissionId: string, me: CurrentUser):
   const access = await checkSubmissionAccess(submissionId, me);
   return access.allowed && access.role === "trainer";
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLOISONNEMENT DES PIÈCES DU DOSSIER (GED)
+//
+// Un document a exactement un titulaire : un élève, ou une entreprise.
+//   • Document d'élève  → l'élève lui-même, et l'encadrement de la session.
+//   • Document d'entreprise (convention, facture) → l'encadrement seulement.
+//     AUCUN élève n'y accède, pas même celui qui suit la formation financée.
+//
+// L'encadrement, c'est le propriétaire ou l'animateur de la session, le
+// propriétaire de la formation pour une pièce de modèle, le propriétaire de
+// l'entreprise pour une pièce d'entreprise sans session, ou un superviseur.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type DocumentAccess = { allowed: false } | { allowed: true; role: "holder" | "staff" };
+
+export async function checkDocumentAccess(documentId: string, me: CurrentUser): Promise<DocumentAccess> {
+  const document = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: {
+      ownerUserId: true,
+      archivedAt: true,
+      session: { select: { ownerId: true, trainerId: true } },
+      company: { select: { ownerId: true } },
+      formation: { select: { ownerId: true } },
+    },
+  });
+  if (!document) return { allowed: false };
+
+  if (canSupervise(me)) return { allowed: true, role: "staff" };
+
+  const staff =
+    document.session?.ownerId === me.id ||
+    document.session?.trainerId === me.id ||
+    document.company?.ownerId === me.id ||
+    document.formation?.ownerId === me.id;
+  if (staff) return { allowed: true, role: "staff" };
+
+  // Le titulaire élève lit sa pièce — sauf si elle a été retirée par erreur de dépôt.
+  if (document.ownerUserId === me.id && !document.archivedAt) return { allowed: true, role: "holder" };
+
+  return { allowed: false };
+}
+
+// Droit de déposer, remplacer ou retirer une pièce : l'encadrement, jamais l'élève.
+export async function canManageDocument(documentId: string, me: CurrentUser): Promise<boolean> {
+  const access = await checkDocumentAccess(documentId, me);
+  return access.allowed && access.role === "staff";
+}

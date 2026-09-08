@@ -78,6 +78,19 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 - [ ] Vérifier que les policies RLS sont bien actives sur la base de production
       (27 tables, voir la migration `rls_auth_sync`).
 
+## Documents et dossier de preuve (Palier 5)
+
+- [ ] **Créer le bucket privé `documents`** sur le projet de production, comme
+      `content` et `submissions`. Il doit rester **non public** : chaque
+      ouverture passe par `/api/documents/[documentId]`, qui vérifie les droits
+      puis délivre une URL signée de 60 secondes.
+- [ ] **Sauvegarder ce bucket** avec une rétention longue : ce sont les pièces
+      d'audit (contrats, conventions, émargements signés, attestations). Leur
+      perte est irrattrapable, contrairement aux supports de cours.
+- [ ] Définir la **durée de conservation** par type de pièce et renseigner
+      `retention_until` en conséquence (obligations comptables et Qualiopi
+      d'un côté, minimisation RGPD de l'autre).
+
 ## Invitation des élèves (Palier 4)
 
 - [ ] **Allonger la durée de validité des liens e-mail** dans Supabase

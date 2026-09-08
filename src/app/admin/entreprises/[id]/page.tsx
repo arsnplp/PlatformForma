@@ -10,6 +10,7 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
+import { CompanyDocuments } from "@/components/documents/company-documents";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
@@ -95,6 +96,13 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
         ) : null}
       </dl>
 
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Documents</h2>
+        <p className="-mt-2 text-sm text-foreground-secondary">
+          Conventions, devis, factures. Pièces de l&apos;entreprise : aucun élève n&apos;y a accès.
+        </p>
+        <CompanyDocuments companyId={company.id} readOnly={isArchived} />
+      </section>
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Prospects</h2>

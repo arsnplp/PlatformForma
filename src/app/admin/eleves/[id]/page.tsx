@@ -9,6 +9,8 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
 import { ResendInvitation } from "@/components/admin/resend-invitation";
+import { DocumentList } from "@/components/documents/document-list";
+import { DocumentUpload } from "@/components/documents/document-upload";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -125,35 +127,21 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
       {/* ─── Documents & signatures ─────────────────────────────────────── */}
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Documents et signatures</h2>
-        {student.documentsOwned.length === 0 ? (
-          <EmptyState title="Aucun document">Contrats, conventions, convocations, attestations… arrivent avec la GED (palier 5).</EmptyState>
+        <DocumentList
+          manageable
+          documents={student.documentsOwned.map((d) => ({ ...d, holder: d.session?.name ?? null }))}
+          emptyLabel="Aucune pièce au dossier de cet élève"
+        />
+        {student.enrollments.length > 0 ? (
+          <DocumentUpload
+            label="Déposer une pièce au dossier de l'élève"
+            target={{ ownerUserId: student.id }}
+            sessions={student.enrollments.map((e) => ({ id: e.session.id, name: e.session.name }))}
+          />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Document</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Session</TableHead>
-                <TableHead>Signature</TableHead>
-                <TableHead>Créé le</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {student.documentsOwned.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-medium">{d.title}</TableCell>
-                  <TableCell className="text-foreground-secondary">{d.type}</TableCell>
-                  <TableCell className="text-foreground-secondary">{d.session?.name ?? "—"}</TableCell>
-                  <TableCell>
-                    <StatusBadge tone={d.signatureStatus === "signed" ? "green" : d.signatureStatus === "pending" ? "yellow" : "gray"}>
-                      {d.signatureStatus === "signed" ? "Signé" : d.signatureStatus === "pending" ? "En attente" : "Sans signature"}
-                    </StatusBadge>
-                  </TableCell>
-                  <TableCell className="text-foreground-secondary">{formatDateTime(d.createdAt)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <p className="text-sm text-foreground-tertiary">
+            Une pièce d&apos;élève se rattache toujours à une session : inscris-le d&apos;abord à une session.
+          </p>
         )}
       </section>
 

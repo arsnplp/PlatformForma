@@ -194,6 +194,7 @@ model User {
   stepInstancesDone        StepInstance[]     @relation("StepInstanceDoneBy")
   executionsTriggered      StepExecution[]    @relation("ExecutionTriggeredBy")
   documentsOwned           Document[]         @relation("DocumentOwner")
+  documentsUploaded        Document[]         @relation("DocumentUploader")
   attendances              Attendance[]
   conversations            Conversation[]
   conversationReads        ConversationRead[]
@@ -667,13 +668,22 @@ model Document {
   signatureProviderId String?         @map("signature_provider_id")
   signedAt            DateTime?       @map("signed_at")
   createdAt           DateTime        @default(now()) @map("created_at")
+  /// Qui a déposé la pièce (audit).
+  uploadedById        String?         @map("uploaded_by_id") @db.Uuid
+  /// Hérité de la session : un document de démonstration ne doit jamais passer
+  /// pour une pièce réelle dans un dossier de preuve.
+  isDemo              Boolean         @default(false) @map("is_demo")
+  /// Retrait d'un dépôt erroné. Interdit dès qu'une signature est engagée :
+  /// un document signé est du vécu, il ne bouge plus.
+  archivedAt          DateTime?       @map("archived_at")
   /// Date de purge RGPD.
   retentionUntil      DateTime?       @map("retention_until") @db.Date
 
-  owner     User?      @relation("DocumentOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  session   Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
-  formation Formation? @relation(fields: [formationId], references: [id], onDelete: Restrict)
+  owner      User? @relation("DocumentOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  uploadedBy User? @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+  company    Company?   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  session    Session?   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  formation  Formation? @relation(fields: [formationId], references: [id], onDelete: Restrict)
 
   attendances  Attendance[]
   activityLogs ActivityLog[]
@@ -681,6 +691,7 @@ model Document {
   @@index([ownerUserId])
   @@index([sessionId])
   @@index([companyId])
+  @@index([formationId])
   @@index([retentionUntil])
   @@map("documents")
 }

@@ -40,9 +40,12 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
         {fv.formation.description ? (
           <p className="mt-2 text-foreground-secondary">{fv.formation.description}</p>
         ) : null}
-        <p className="mt-3 text-sm">
+        <p className="mt-3 flex flex-wrap gap-4 text-sm">
           <Link href={`/espace/sessions/${sessionId}/messages`} className="font-medium text-brand hover:underline">
             Messages avec mon formateur →
+          </Link>
+          <Link href={`/espace/sessions/${sessionId}/documents`} className="font-medium text-brand hover:underline">
+            Mes documents →
           </Link>
         </p>
         <p className="mt-3 text-sm text-foreground-tertiary">

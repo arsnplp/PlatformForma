@@ -35,7 +35,7 @@ export const ENROLLMENT_STATUS: Record<EnrollmentStatus, { label: string; tone: 
   dropped: { label: "Abandon", tone: "red" },
 };
 
-import type { TriggerType, TriggerAnchor, ActionType, StepInstanceStatus } from "@/generated/prisma/enums";
+import type { TriggerType, TriggerAnchor, ActionType, StepInstanceStatus, DocumentType, SignatureStatus } from "@/generated/prisma/enums";
 
 // Phases du process (spec §6). L'index est stocké en base (StepTemplate.phase).
 export const PHASES: { n: number; label: string; hint: string }[] = [
@@ -78,4 +78,22 @@ export const STEP_STATUS: Record<StepInstanceStatus, { label: string; tone: Stat
   pending: { label: "À faire", tone: "gray" },
   done: { label: "Fait", tone: "green" },
   skipped: { label: "Passée", tone: "purple" },
+};
+
+// Pièces de la GED (spec §5.7). L'ordre est celui du dossier de preuve.
+export const DOCUMENT_TYPES: Record<DocumentType, { label: string; phase: number }> = {
+  contrat: { label: "Contrat", phase: 2 },
+  convention: { label: "Convention de formation", phase: 2 },
+  convocation: { label: "Convocation", phase: 3 },
+  emargement: { label: "Feuille d'émargement", phase: 4 },
+  attestation: { label: "Attestation", phase: 5 },
+  eval: { label: "Évaluation / bilan", phase: 5 },
+  facture: { label: "Facture", phase: 5 },
+  autre: { label: "Autre pièce", phase: 4 },
+};
+
+export const SIGNATURE_STATUS: Record<SignatureStatus, { label: string; tone: StatusTone }> = {
+  na: { label: "Sans signature", tone: "gray" },
+  pending: { label: "Signature en attente", tone: "yellow" },
+  signed: { label: "Signée", tone: "green" },
 };

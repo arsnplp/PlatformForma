@@ -6,6 +6,11 @@ export const CONTENT_BUCKET = "content";
 // et aucun risque de confusion avec les fichiers de contenu.
 export const SUBMISSION_BUCKET = "submissions";
 
+// Les pièces du dossier (contrats, conventions, émargements, attestations)
+// vivent à part : ce sont des preuves d'audit, avec leur propre durée de
+// conservation et des droits plus stricts que les supports de cours.
+export const DOCUMENT_BUCKET = "documents";
+
 export const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 Mo
 
 // Types acceptés. Le SVG est volontairement exclu : il peut porter du script.
@@ -56,4 +61,21 @@ export function formatBytes(bytes: number): string {
 export function safeFileName(name: string): string {
   const base = name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
   return base.slice(-80).replace(/^-+/, "") || "fichier";
+}
+
+// Pièces de la GED : bureautique et PDF, jamais d'archive ni d'exécutable —
+// une pièce de dossier doit s'ouvrir et se lire telle quelle.
+export const DOCUMENT_TYPES: readonly string[] = [
+  ...ALLOWED_TYPES.pdf,
+  ...ALLOWED_TYPES.image,
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+];
+
+export function isAllowedDocumentType(mimeType: string): boolean {
+  return DOCUMENT_TYPES.includes(mimeType);
 }
