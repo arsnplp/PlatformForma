@@ -146,13 +146,15 @@ function clean(value: string): string {
   return safeFileName(value).replace(/-{2,}/g, "-").replace(/^-|-$/g, "");
 }
 
-// Chemin d'une pièce dans l'archive : session → phase → fichier.
+// Chemin d'une pièce dans l'archive : session → phase → fichier. La phase ne
+// s'intercale que si elle est renseignée — elle ne se saisit plus au dépôt, et
+// un dossier « Sans_phase » n'apprendrait rien à personne.
 function entryPath(piece: Piece, index: number): string {
-  const phase = piece.phase !== null ? `P${piece.phase}_${clean(phaseLabel(piece.phase))}` : "Sans_phase";
+  const phase = piece.phase !== null ? `${clean(`P${piece.phase}_${phaseLabel(piece.phase)}`)}/` : "";
   const extension = piece.storagePath.match(/\.[a-z0-9]+$/i)?.[0] ?? ".pdf";
   const short = piece.title.split(" — ").filter((part) => part !== piece.sessionLabel.split(" — ").at(-1)).join(" — ");
   const name = `${String(index).padStart(2, "0")}_${clean(short)}`.replace(/\.[a-z0-9]+$/i, "");
-  return `${clean(piece.sessionLabel)}/${phase}/${name}${extension}`;
+  return `${clean(piece.sessionLabel)}/${phase}${name}${extension}`;
 }
 
 // Flux ZIP : chaque pièce est copiée une par une, jamais toutes en mémoire.

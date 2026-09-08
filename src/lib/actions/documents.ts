@@ -29,7 +29,9 @@ const targetSchema = z
     companyId: z.string().uuid().nullable().optional(),
     sessionId: z.string().uuid().nullable().optional(),
     formationId: z.string().uuid().nullable().optional(),
-    type: z.nativeEnum(DocumentType),
+    // Le classement n'est plus demandé au dépôt : une pièce se retrouve par son
+    // intitulé et son dossier, pas par une taxonomie à remplir à la main.
+    type: z.nativeEnum(DocumentType).default("autre"),
     phase: z.number().int().refine((n) => PHASE_NUMBERS.includes(n), "Phase inconnue").nullable().optional(),
     title: z.string().trim().min(1, "Titre requis").max(200),
   })
@@ -39,6 +41,8 @@ const targetSchema = z
   });
 
 export type DocumentTarget = z.infer<typeof targetSchema>;
+/// Ce que l'appelant fournit : le classement, lui, est rempli par défaut.
+export type DocumentTargetInput = z.input<typeof targetSchema>;
 
 // Le déposant doit être maître du dossier visé : session qu'il possède ou
 // anime, entreprise ou formation qui lui appartient.
@@ -82,7 +86,7 @@ async function assertHolderInScope(target: DocumentTarget) {
 // Autorisation d'envoi. Le chemin dit à qui appartient la pièce et où elle se
 // range : il est calculé côté serveur, jamais fourni par le client.
 export async function requestDocumentUpload(
-  target: DocumentTarget,
+  target: DocumentTargetInput,
   fileName: string,
   mimeType: string,
   sizeBytes: number,
@@ -127,7 +131,7 @@ function documentPath(target: DocumentTarget, fileName: string): string {
 // Enregistrement de la pièce, une fois le fichier envoyé. Le chemin doit être
 // celui qu'on a calculé : on ne référence pas un fichier arbitraire du bucket.
 export async function createDocument(
-  target: DocumentTarget,
+  target: DocumentTargetInput,
   file: { path: string; mimeType: string; sizeBytes: number },
 ): Promise<DocumentState> {
   const me = await requirePermission("can_manage_sessions");

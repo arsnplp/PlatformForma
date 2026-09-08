@@ -1,7 +1,7 @@
 import "server-only";
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { DOCUMENT_TYPES, SIGNATURE_STATUS, phaseLabel } from "@/lib/labels";
+import { SIGNATURE_STATUS, phaseLabel } from "@/lib/labels";
 import type { DocumentType, SignatureStatus } from "@/generated/prisma/enums";
 
 // Sommaire du dossier de preuve : ce qu'un auditeur lit en premier pour savoir
@@ -76,7 +76,6 @@ export async function buildManifest(input: ManifestInput): Promise<Uint8Array> {
     page.drawText(entry.title.slice(0, 88), { x: MARGIN, y: y - 4, size: 10, font: bold, color: rgb(0.15, 0.15, 0.15) });
 
     const meta = [
-      DOCUMENT_TYPES[entry.type].label,
       entry.phase !== null ? `P${entry.phase} ${phaseLabel(entry.phase)}` : null,
       entry.holder,
       `déposée le ${dateFmt.format(entry.createdAt)}`,

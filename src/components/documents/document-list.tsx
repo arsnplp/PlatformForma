@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DOCUMENT_TYPES, SIGNATURE_STATUS, phaseLabel } from "@/lib/labels";
+import { SIGNATURE_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import { formatBytes } from "@/lib/storage/config";
 import { StatusBadge } from "@/components/admin/status-badge";
@@ -57,12 +57,12 @@ export function DocumentList({
                 {d.archivedAt ? <StatusBadge tone="gray">Retirée</StatusBadge> : null}
               </p>
               <p className="mt-0.5 text-xs text-foreground-secondary">
-                {DOCUMENT_TYPES[d.type].label}
-                {d.phase !== null ? ` · P${d.phase} ${phaseLabel(d.phase)}` : ""}
-                {d.holder ? ` · ${d.holder}` : ""}
-                {" · déposée le "}{formatDate(d.createdAt)}
-                {d.sizeBytes ? ` · ${formatBytes(d.sizeBytes)}` : ""}
-                {d.signedAt ? ` · signée le ${formatDate(d.signedAt)}` : ""}
+                {[
+                  d.holder,
+                  `déposée le ${formatDate(d.createdAt)}`,
+                  d.sizeBytes ? formatBytes(d.sizeBytes) : null,
+                  d.signedAt ? `signée le ${formatDate(d.signedAt)}` : null,
+                ].filter(Boolean).join(" · ")}
               </p>
             </div>
 

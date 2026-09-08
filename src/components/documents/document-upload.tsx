@@ -2,10 +2,8 @@
 
 import { useId, useState, useTransition } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { requestDocumentUpload, createDocument, type DocumentTarget } from "@/lib/actions/documents";
+import { requestDocumentUpload, createDocument, type DocumentTargetInput } from "@/lib/actions/documents";
 import { MAX_FILE_BYTES, DOCUMENT_TYPES as MIME_TYPES, formatBytes } from "@/lib/storage/config";
-import { DOCUMENT_TYPES, PHASES } from "@/lib/labels";
-import type { DocumentType } from "@/generated/prisma/enums";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/admin/native-select";
 import { FormField } from "@/components/admin/form-field";
@@ -19,15 +17,13 @@ export function DocumentUpload({
   label = "Déposer une pièce",
   sessions,
 }: {
-  target: Omit<DocumentTarget, "type" | "phase" | "title">;
+  target: Omit<DocumentTargetInput, "type" | "phase" | "title">;
   label?: string;
   /// Quand la pièce peut aller dans plusieurs sessions du même titulaire,
   /// c'est ici qu'on choisit laquelle : une pièce sans session ne serait
   /// rattachable à aucun dossier de preuve.
   sessions?: { id: string; name: string }[];
 }) {
-  const [type, setType] = useState<DocumentType>("contrat");
-  const [phase, setPhase] = useState<number>(DOCUMENT_TYPES.contrat.phase);
   const [title, setTitle] = useState("");
   const [sessionId, setSessionId] = useState(sessions?.[0]?.id ?? target.sessionId ?? null);
   const [busy, setBusy] = useState(false);
@@ -37,17 +33,12 @@ export function DocumentUpload({
   const [done, setDone] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
-  function changeType(value: DocumentType) {
-    setType(value);
-    setPhase(DOCUMENT_TYPES[value].phase);
-  }
-
   async function upload(file: File) {
     setError(null);
     setDone(null);
     if (file.size > MAX_FILE_BYTES) { setError(`Fichier trop lourd (${formatBytes(file.size)}).`); return; }
 
-    const full: DocumentTarget = { ...target, sessionId, type, phase, title: title.trim() || file.name };
+    const full: DocumentTargetInput = { ...target, sessionId, title: title.trim() || file.name };
     setBusy(true);
     try {
       const ticket = await requestDocumentUpload(full, file.name, file.type, file.size);
@@ -83,23 +74,9 @@ export function DocumentUpload({
         </FormField>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <FormField id="doc-type" label="Type">
-          <NativeSelect id="doc-type" value={type} onChange={(e) => changeType(e.target.value as DocumentType)}>
-            {Object.entries(DOCUMENT_TYPES).map(([key, v]) => (
-              <option key={key} value={key}>{v.label}</option>
-            ))}
-          </NativeSelect>
-        </FormField>
-        <FormField id="doc-phase" label="Phase">
-          <NativeSelect id="doc-phase" value={String(phase)} onChange={(e) => setPhase(Number(e.target.value))}>
-            {PHASES.map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.label}</option>)}
-          </NativeSelect>
-        </FormField>
-        <FormField id="doc-title" label="Intitulé">
-          <Input id="doc-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nom du fichier si vide" />
-        </FormField>
-      </div>
+      <FormField id="doc-title" label="Intitulé">
+        <Input id="doc-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nom du fichier si vide" />
+      </FormField>
 
       {/* Deux façons de déposer : glisser le fichier, ou cliquer pour l'ouvrir
           depuis le disque. Le glisser-déposer évite le sélecteur du système,

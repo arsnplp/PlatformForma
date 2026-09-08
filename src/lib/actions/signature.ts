@@ -8,7 +8,6 @@ import { downloadFile, uploadFile } from "@/lib/storage/client";
 import { DOCUMENT_BUCKET } from "@/lib/storage/config";
 import { createSignatureRequest, getSignatureRequest, downloadSignedPdf, isCompleted, isDeclined } from "@/lib/signature/signwell";
 import { resolveSigner, isSignatureTest } from "@/lib/signature/config";
-import { DOCUMENT_TYPES } from "@/lib/labels";
 import { sendMail } from "@/lib/mail/send";
 import { renderMessage } from "@/lib/messages/render";
 import { SIGNATURE_REQUEST_TEMPLATE } from "@/lib/messages/notification";
@@ -52,7 +51,9 @@ export async function requestSignature(documentId: string): Promise<SignatureSta
   const signer = resolveSigner(intended);
   const result = await createSignatureRequest({
     title: document.title,
-    fileName: `${DOCUMENT_TYPES[document.type].label}.pdf`,
+    // Le nom envoyé au prestataire est l'intitulé de la pièce : c'est ce que
+    // le signataire lit en haut de sa fenêtre de signature.
+    fileName: `${document.title}.pdf`,
     file,
     signer,
     message: "Merci de relire puis de signer ce document depuis votre espace de formation.",
