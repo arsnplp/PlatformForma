@@ -196,9 +196,7 @@ export function streamDossier(params: {
           subtitle: params.subtitle,
           scope: [
             "Pièces classées par session, puis par phase du process.",
-            params.isDemo
-              ? "Session de démonstration : aucune pièce de cette archive n'a de valeur probante."
-              : "Les pièces signées portent leur page de preuve (horodatage et identité du signataire).",
+            "Les pièces signées portent leur page de preuve (horodatage et identité du signataire).",
           ],
           generatedBy: params.generatedBy,
           generatedAt: new Date(),

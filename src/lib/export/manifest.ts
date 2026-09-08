@@ -50,14 +50,6 @@ export async function buildManifest(input: ManifestInput): Promise<Uint8Array> {
   page.drawText(input.subtitle, { x: MARGIN, y, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
   y -= 22;
 
-  if (input.isDemo) {
-    page.drawRectangle({ x: MARGIN, y: y - 26, width: A4.width - 2 * MARGIN, height: 30, color: rgb(1, 0.94, 0.88) });
-    page.drawText("DONNÉES DE DÉMONSTRATION — ce dossier n'a aucune valeur probante.", {
-      x: MARGIN + 10, y: y - 16, size: 10, font: bold, color: rgb(0.72, 0.35, 0.05),
-    });
-    y -= 42;
-  }
-
   for (const line of input.scope) {
     page.drawText(line, { x: MARGIN, y, size: 9.5, font, color: rgb(0.3, 0.3, 0.3) });
     y -= 13;
@@ -91,9 +83,6 @@ export async function buildManifest(input: ManifestInput): Promise<Uint8Array> {
       entry.signatureStatus === "signed" && entry.signedAt
         ? `signée le ${dateFmt.format(entry.signedAt)}`
         : SIGNATURE_STATUS[entry.signatureStatus].label,
-      // Une pièce de démonstration se repère ligne à ligne, même dans un
-      // dossier qui mélange plusieurs sessions.
-      entry.isDemo ? "DÉMONSTRATION" : null,
     ].filter(Boolean).join(" · ");
     page.drawText(meta.slice(0, 120), { x: MARGIN, y: y - 17, size: 8, font, color: rgb(0.45, 0.45, 0.45) });
     // Chemin dans l'archive, sans le dossier de session déjà annoncé en titre.

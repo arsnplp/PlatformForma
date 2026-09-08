@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
   );
 
   const stream = streamDossier({ ...collected, generatedBy: me.name });
-  const fileName = `${collected.isDemo ? "DEMONSTRATION_" : ""}${collected.fileName}.zip`;
+  // Le préfixe « DEMONSTRATION_ » a été retiré à la demande : voir DEPLOIEMENT.md.
+  const fileName = `${collected.fileName}.zip`;
 
   return new NextResponse(stream, {
     headers: {
