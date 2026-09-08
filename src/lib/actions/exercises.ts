@@ -26,6 +26,8 @@ type Ctx = {
   versionNumber: number;
   /// Page qui liste les exercices de cette cible : là où l'on retourne.
   back: string;
+  /// Formulaire vierge de la même cible : on y reste pour enchaîner.
+  again: string;
 };
 
 // Filtre Prisma des exercices frères, c'est-à-dire ceux de la même cible.
@@ -50,6 +52,9 @@ async function loadDraftTarget(target: ExerciseTarget, me: CurrentUser): Promise
   if (v.formation.archivedAt) throw new Error("Formation archivée");
   if (v.status !== "draft") throw new Error("Version publiée : ses exercices sont gelés");
 
+  const base = target.lessonId
+    ? `/admin/formations/${v.formationId}/lecons/${target.lessonId}`
+    : `/admin/formations/${v.formationId}/modules/${target.moduleId}`;
   return {
     target,
     formationId: v.formationId,
@@ -57,6 +62,7 @@ async function loadDraftTarget(target: ExerciseTarget, me: CurrentUser): Promise
     back: target.lessonId
       ? `/admin/formations/${v.formationId}/lecons/${target.lessonId}`
       : `/admin/formations/${v.formationId}?v=${v.versionNumber}&tab=content`,
+    again: `${base}/exercices/nouveau`,
   };
 }
 
@@ -124,7 +130,8 @@ export async function createExercise(target: ExerciseTarget, input: unknown): Pr
     },
   });
   revalidate(ctx);
-  redirect(ctx.back);
+  // On enchaîne : créer dix exercices ne doit pas demander dix allers-retours.
+  redirect(`${ctx.again}?cree=${encodeURIComponent(title)}`);
 }
 
 export async function updateExercise(exerciseId: string, input: unknown): Promise<FormState> {

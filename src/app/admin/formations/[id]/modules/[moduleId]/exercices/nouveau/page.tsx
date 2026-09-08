@@ -5,10 +5,13 @@ import { isOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { createExercise } from "@/lib/actions/exercises";
 import { PageHeader } from "@/components/admin/page-header";
 import { ExerciseForm } from "@/components/content/exercise-form";
+import { ExerciseList } from "@/components/content/exercise-list";
 
 // Exercice de fin de module : même formulaire que pour une leçon, autre attache.
-export default async function NewModuleExercisePage({ params }: PageProps<"/admin/formations/[id]/modules/[moduleId]/exercices/nouveau">) {
+export default async function NewModuleExercisePage({ params, searchParams }: PageProps<"/admin/formations/[id]/modules/[moduleId]/exercices/nouveau">) {
   const { id, moduleId } = await params;
+  const { cree } = await searchParams;
+  const created = typeof cree === "string" ? cree : null;
   const me = await requireUser(`/admin/formations/${id}`);
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
 
@@ -32,7 +35,21 @@ export default async function NewModuleExercisePage({ params }: PageProps<"/admi
           { label: formation.name, href: back },
         ]}
       />
-      <ExerciseForm action={createExercise.bind(null, { moduleId })} cancelHref={back} submitLabel="Créer l'exercice" />
+      {created ? (
+        <p className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">
+          « {created} » a été créé. Le formulaire est vierge : enchaîne, ou reviens à la formation.
+        </p>
+      ) : null}
+
+      {/* Le formulaire repart à zéro à chaque création : la clé force le remontage. */}
+      <ExerciseForm
+        key={created ?? "vierge"}
+        action={createExercise.bind(null, { moduleId })}
+        cancelHref={back}
+        submitLabel="Créer l'exercice"
+      />
+
+      <ExerciseList formationId={id} target={{ moduleId }} editable compact />
     </div>
   );
 }
