@@ -32,8 +32,9 @@ async function buildActivationLink(email: string): Promise<{ link: string } | { 
 export async function sendInvitation(params: {
   student: { id: string; name: string; email: string };
   trainer: { name: string; email: string | null };
-  formationName: string;
-  sessionName: string | null;
+  /// Absents quand le compte est créé hors session : le message s'adapte.
+  formationName?: string | null;
+  sessionName?: string | null;
   actorId: string;
 }): Promise<InvitationResult> {
   const built = await buildActivationLink(params.student.email);
@@ -43,8 +44,9 @@ export async function sendInvitation(params: {
     "eleve.prenom": firstName(params.student.name),
     "eleve.nom": params.student.name,
     "eleve.email": params.student.email,
-    "formation.nom": params.formationName,
+    "formation.nom": params.formationName ?? "",
     "session.nom": params.sessionName ?? "",
+    sans_formation: params.formationName ? "" : "oui",
     "formateur.nom": params.trainer.name,
     "formateur.email": params.trainer.email ?? "",
     lien_activation: built.link,

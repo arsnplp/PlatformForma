@@ -24,13 +24,14 @@ export function enrollmentScope(me: CurrentUser): Prisma.EnrollmentWhereInput {
 export function listStudents(
   me: CurrentUser,
   search = "",
-  filters: { sessionId?: string; status?: string } = {},
+  filters: { sessionId?: string; status?: string; companyId?: string } = {},
 ) {
   const q = search.trim();
   return prisma.user.findMany({
     where: {
       ...studentScope(me),
       ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] } : {}),
+      ...(filters.companyId ? { companyId: filters.companyId } : {}),
       // Filtrer par session ou par statut d'inscription revient à ne garder que
       // les élèves ayant AU MOINS une inscription qui correspond.
       ...(filters.sessionId || filters.status
@@ -50,6 +51,7 @@ export function listStudents(
       name: true,
       email: true,
       createdAt: true,
+      company: { select: { id: true, name: true } },
       enrollments: {
         where: enrollmentScope(me),
         orderBy: { session: { startDate: "desc" } },
@@ -66,6 +68,7 @@ export async function getStudentDossier(id: string, me: CurrentUser) {
   const student = await prisma.user.findFirst({
     where: { id, ...studentScope(me) },
     include: {
+      company: { select: { id: true, name: true } },
       enrollments: {
         where: enrollmentScope(me),
         orderBy: { enrolledAt: "desc" },

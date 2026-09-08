@@ -194,6 +194,10 @@ model User {
   name       String
   createdAt  DateTime  @default(now()) @map("created_at")
   archivedAt DateTime? @map("archived_at")
+  /// Entreprise de rattachement d'un élève : plusieurs élèves peuvent venir de
+  /// la même. Distincte de l'entreprise cliente d'une session, qui paie — un
+  /// groupe peut mélanger des salariés de plusieurs entreprises.
+  companyId  String?   @map("company_id") @db.Uuid
 
   userRoles                UserRole[]
   accessLogs               AccessLog[]
@@ -207,6 +211,7 @@ model User {
   stepTemplatesAssigned    StepTemplate[]     @relation("StepTemplateAssigneeUser")
   stepInstancesDone        StepInstance[]     @relation("StepInstanceDoneBy")
   executionsTriggered      StepExecution[]    @relation("ExecutionTriggeredBy")
+  company                  Company?           @relation("CompanyMembers", fields: [companyId], references: [id], onDelete: Restrict)
   documentsOwned           Document[]         @relation("DocumentOwner")
   documentsUploaded        Document[]         @relation("DocumentUploader")
   attendances              Attendance[]
@@ -309,6 +314,7 @@ model Company {
   owner User @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   prospects Prospect[]
+  members   User[]     @relation("CompanyMembers")
   sessions  Session[]
   documents Document[]
 

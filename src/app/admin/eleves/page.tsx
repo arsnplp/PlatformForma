@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ListFilters } from "@/components/admin/list-filters";
+import { CreateStudentForm } from "@/components/admin/create-student-form";
 import { prisma } from "@/lib/prisma";
 import { ownerFilter } from "@/lib/auth/ownership";
 
@@ -22,13 +23,20 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
   const sessionId = typeof params.session === "string" ? params.session : "";
   const status = typeof params.inscription === "string" ? params.inscription : "";
 
-  const [students, sessions] = await Promise.all([
-    listStudents(me, search, { sessionId, status }),
+  const companyId = typeof params.entreprise === "string" ? params.entreprise : "";
+
+  const [students, sessions, companies] = await Promise.all([
+    listStudents(me, search, { sessionId, status, companyId }),
     prisma.session.findMany({
       where: { ...ownerFilter(me), enrollments: { some: {} } },
       orderBy: { startDate: "desc" },
       select: { id: true, name: true },
       take: 100,
+    }),
+    prisma.company.findMany({
+      where: { ...ownerFilter(me), archivedAt: null },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     }),
   ]);
 
@@ -39,8 +47,9 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
         description={
           canSupervise(me)
             ? "Tous les élèves de la plateforme. Chaque dossier est autonome et complet, anciens élèves inclus."
-            : "Les élèves inscrits à tes sessions, anciens inclus. Un élève s'ajoute depuis la fiche d'une session."
+            : "Les élèves inscrits à tes sessions, anciens inclus."
         }
+        actions={<CreateStudentForm companies={companies} />}
       />
 
       <ListFilters
@@ -51,6 +60,12 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
             label: "Session",
             allLabel: "Toutes les sessions",
             options: sessions.map((s) => ({ value: s.id, label: s.name })),
+          },
+          {
+            key: "entreprise",
+            label: "Entreprise",
+            allLabel: "Toutes les entreprises",
+            options: companies.map((c) => ({ value: c.id, label: c.name })),
           },
           {
             key: "inscription",
@@ -70,6 +85,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
           <TableHeader>
             <TableRow>
               <TableHead>Élève</TableHead>
+              <TableHead>Entreprise</TableHead>
               <TableHead>Dernière session</TableHead>
               <TableHead className="text-right">En cours</TableHead>
               <TableHead className="text-right">Terminées</TableHead>
@@ -88,6 +104,13 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
                   <TableCell>
                     <Link href={`/admin/eleves/${s.id}`} className="font-medium hover:underline">{s.name}</Link>
                     <span className="block text-xs text-foreground-tertiary">{s.email}</span>
+                  </TableCell>
+                  <TableCell>
+                    {s.company ? (
+                      <Link href={`/admin/entreprises/${s.company.id}`} className="hover:underline">{s.company.name}</Link>
+                    ) : (
+                      <span className="text-xs text-foreground-tertiary">À titre personnel</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {last ? (

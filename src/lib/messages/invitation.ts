@@ -5,7 +5,7 @@ export const INVITATION_TEMPLATE = {
   subject: "Votre accès à la plateforme de formation",
   body: `Bonjour {{eleve.prenom}},
 
-{{formateur.nom}} vous a inscrit(e) à la formation **{{formation.nom}}**{{#si session.nom}} ({{session.nom}}){{/si}}.
+{{#si formation.nom}}{{formateur.nom}} vous a inscrit(e) à la formation **{{formation.nom}}**{{#si session.nom}} ({{session.nom}}){{/si}}.{{/si}}{{#si sans_formation}}{{formateur.nom}} vous a créé un accès à la plateforme de formation.{{/si}}
 
 Pour accéder à votre espace, choisissez votre mot de passe :
 

@@ -11,11 +11,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/admin/page-header";
+import { CreateTrainerForm } from "@/components/admin/create-trainer-form";
 
 export default async function UsersPage() {
   const me = await requireUser("/admin/utilisateurs");
   if (!hasPermission(me, "can_manage_users")) redirect("/admin");
   const canGrant = hasPermission(me, "can_grant_admin");
+  const canCreate = hasPermission(me, "can_manage_users");
 
   const users = await prisma.user.findMany({
     where: { archivedAt: null },
@@ -24,13 +27,14 @@ export default async function UsersPage() {
   });
 
   return (
-    <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Utilisateurs</h1>
-      <p className="mt-2 text-foreground-secondary">
-        Les rôles et leurs permissions sont des données : rien n&apos;est codé en dur.
-      </p>
+    <div className="space-y-8">
+      <PageHeader
+        title="Utilisateurs"
+        description="Les rôles et leurs permissions sont des données : rien n'est codé en dur."
+        actions={canCreate ? <CreateTrainerForm /> : null}
+      />
 
-      <Table className="mt-8">
+      <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Nom</TableHead>
