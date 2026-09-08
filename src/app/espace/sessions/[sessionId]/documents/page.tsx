@@ -43,7 +43,7 @@ export default async function StudentDocumentsPage({ params }: PageProps<"/espac
           <p className="text-sm text-foreground-secondary">
             Vos pièces pour {session.name} : convocation, contrat, attestation, émargements signés.
           </p>
-          <DocumentList documents={documents} emptyLabel="Aucun document pour l'instant" />
+          <DocumentList documents={documents} signable emptyLabel="Aucun document pour l'instant" />
         </>
       )}
     </div>

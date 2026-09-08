@@ -14,3 +14,22 @@ Pour lire {{compte_minuscule}} et répondre :
 {{/si}}Bonne journée,
 La plateforme de formation`,
 };
+
+// Invitation à signer, pour un signataire qui n'a pas de compte sur la
+// plateforme — typiquement le contact d'une entreprise cliente. L'élève, lui,
+// signe depuis son espace : il n'a pas besoin de ce message.
+export const SIGNATURE_REQUEST_TEMPLATE = {
+  subject: "À signer : {{document.titre}}",
+  body: `Bonjour {{destinataire.prenom}},
+
+{{demandeur.nom}} vous demande de signer le document **{{document.titre}}**{{#si formation.nom}}, pour la formation {{formation.nom}}{{/si}}.
+
+Pour le relire et le signer :
+
+{{lien_signature}}
+
+Ce lien vous est **personnel**. La signature se fait en ligne, sans installation.
+
+Bonne journée,
+La plateforme de formation`,
+};

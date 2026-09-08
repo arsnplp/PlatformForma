@@ -24,6 +24,28 @@ export async function createReadUrl(path: string, options: { download?: string; 
   return data.signedUrl;
 }
 
+// Lecture serveur d'un fichier privé (envoi au prestataire de signature,
+// constitution d'un export). Ne passe jamais par le navigateur.
+export async function downloadFile(path: string, bucket: string = CONTENT_BUCKET): Promise<Uint8Array | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(bucket).download(path);
+  if (error || !data) return null;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+// Écriture serveur (document signé revenu du prestataire).
+export async function uploadFile(
+  path: string,
+  file: Uint8Array,
+  options: { bucket?: string; contentType?: string } = {},
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { error } = await admin.storage
+    .from(options.bucket ?? CONTENT_BUCKET)
+    .upload(path, file, { contentType: options.contentType ?? "application/pdf", upsert: true });
+  return !error;
+}
+
 export async function removeFile(path: string, bucket: string = CONTENT_BUCKET) {
   const admin = createAdminClient();
   await admin.storage.from(bucket).remove([path]);

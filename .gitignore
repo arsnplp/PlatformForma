@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Artefacts de test navigateur (Playwright MCP)
 .playwright-mcp/
+
+# Captures de test
+signature-page.png

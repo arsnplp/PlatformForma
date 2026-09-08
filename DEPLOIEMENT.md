@@ -78,6 +78,25 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 - [ ] Vérifier que les policies RLS sont bien actives sur la base de production
       (27 tables, voir la migration `rls_auth_sync`).
 
+## Signature électronique — SignWell (Palier 5)
+
+- [ ] **Passer `SIGNATURE_MODE` à `production`**, et seulement après avoir
+      déroulé un parcours complet en test. C'est le geste qui rend les
+      signatures juridiquement engageantes : tant qu'il n'est pas fait, chaque
+      document part en `test_mode` et le signataire est réécrit vers
+      `MAIL_SANDBOX_TO`.
+- [ ] **Vérifier le quota et le plan SignWell** : les documents de test sont
+      gratuits, les documents réels sont décomptés.
+- [ ] **Déclarer le webhook** `https://<domaine>/api/webhooks/signwell` dans
+      SignWell (événement « document terminé »). Sans lui, rien n'est perdu :
+      le bouton « Actualiser » sur la pièce redemande le statut. Le webhook ne
+      sert que de déclencheur — la plateforme revérifie toujours le statut
+      auprès de l'API avec sa propre clé, donc un appel forgé n'a aucun effet.
+- [ ] **`SIGNWELL_API_KEY`** : créer une clé dédiée à la production et révoquer
+      celle de développement.
+- [ ] Vérifier après bascule qu'une signature réelle aboutit : le PDF signé
+      revient avec sa page de preuve et se range à côté de l'original.
+
 ## Documents et dossier de preuve (Palier 5)
 
 - [ ] **Créer le bucket privé `documents`** sur le projet de production, comme

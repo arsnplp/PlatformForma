@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 import { archiveDocument } from "@/lib/actions/documents";
+import { SignatureActions } from "./signature-actions";
 import { Button } from "@/components/ui/button";
 import type { DocumentType, SignatureStatus } from "@/generated/prisma/enums";
 
@@ -28,10 +29,13 @@ export type DocumentRow = {
 export function DocumentList({
   documents,
   manageable = false,
+  signable = false,
   emptyLabel = "Aucune pièce au dossier",
 }: {
   documents: DocumentRow[];
   manageable?: boolean;
+  /// Vue du titulaire : il peut ouvrir sa page de signature.
+  signable?: boolean;
   emptyLabel?: string;
 }) {
   const visible = manageable ? documents : documents.filter((d) => !d.archivedAt);
@@ -70,6 +74,12 @@ export function DocumentList({
                 <Button asChild variant="ghost" size="sm">
                   <Link href={`/api/documents/${d.id}?download=1`}>Télécharger</Link>
                 </Button>
+                <SignatureActions
+                  documentId={d.id}
+                  status={d.signatureStatus}
+                  canRequest={manageable}
+                  canSign={signable || manageable}
+                />
                 {manageable && d.signatureStatus === "na" ? (
                   <ConfirmButton
                     action={archiveDocument.bind(null, d.id)}
