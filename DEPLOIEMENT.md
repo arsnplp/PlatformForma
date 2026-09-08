@@ -136,6 +136,18 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       que le lien ouvre la page d'activation et que le mot de passe choisi
       permet ensuite de se connecter.
 
+## Inaltérabilité des émargements
+
+- [ ] Vérifier après migration que le déclencheur `attendances_immutable` est
+      bien actif sur la base de production : il refuse tout `DELETE` et toute
+      réécriture d'un émargement dont `signed_at` n'est pas nul, quel que soit
+      le chemin (application, script, console SQL). C'est un argument de
+      conformité opposable en audit.
+- [ ] Pour une purge légitime (RGPD, fin de conservation), le désactiver
+      explicitement le temps de l'opération :
+      `ALTER TABLE public.attendances DISABLE TRIGGER attendances_immutable;`
+      puis le réactiver. Le geste doit rester conscient et tracé.
+
 ## Conformité
 
 - [ ] Renseigner la **durée en heures** sur chaque session : mention obligatoire

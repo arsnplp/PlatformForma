@@ -19,9 +19,14 @@ Ce principe gouverne le versioning, le soft-delete et la conformité audit (Qual
 2. **Séparer Formation (modèle) / Session (instance)** dès le début.
 3. **Session pointe vers une `FormationVersion`**, jamais vers la Formation.
 4. **Soft-delete (`archivedAt`) + `onDelete: Restrict` partout** → un dossier élève est indestructible et tient debout même formation archivée. Aucun `DELETE` physique, aucune cascade.
-5. **Figer le process (`process_snapshot_json`)** au démarrage de chaque session : modifier le process ensuite n'affecte pas les sessions en cours.
-6. **Heartbeat + détection d'inactivité** pour des temps de connexion fiables (sinon inutilisables en audit).
-7. **ZIP streamé** (`archiver`), jamais tout en mémoire ; gros exports en tâche de fond ; chaque export loggé dans `AccessLog`.
+5. **Émargement signé = inaltérable en base.** Le déclencheur Postgres
+   `attendances_immutable` refuse tout `DELETE` et toute réécriture d'une ligne
+   `attendances` dont `signed_at` n'est pas nul. Les FK en `RESTRICT` protègent
+   ce qui l'entoure (séance, bloc, leçon, feuille, session) ; ce déclencheur
+   protège la ligne elle-même. Ne jamais le contourner dans du code applicatif.
+6. **Figer le process (`process_snapshot_json`)** au démarrage de chaque session : modifier le process ensuite n'affecte pas les sessions en cours.
+7. **Heartbeat + détection d'inactivité** pour des temps de connexion fiables (sinon inutilisables en audit).
+8. **ZIP streamé** (`archiver`), jamais tout en mémoire ; gros exports en tâche de fond ; chaque export loggé dans `AccessLog`.
 
 ## Sécurité (spec §4)
 
