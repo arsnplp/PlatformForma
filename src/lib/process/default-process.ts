@@ -13,6 +13,8 @@ export type DefaultStep = {
   offset?: number;
   action?: ActionType;
   note?: string;
+  /// Étape adossée aux émargements : suivie par les signatures réelles.
+  attendance?: boolean;
   /// Nom du template par défaut à envoyer (voir default-templates.ts).
   sendTemplate?: string;
   recipient?: "students" | "company_contact" | "trainer";
@@ -43,7 +45,7 @@ export const DEFAULT_PROCESS: DefaultStep[] = [
   { phase: 3, name: "Test de connexion 24h avant démarrage", assignee: "proprio", trigger: "time_offset", anchor: "start_date", offset: -1 },
   { phase: 3, name: "Évaluation initiale complétée", assignee: "proprio", trigger: "time_offset", anchor: "start_date", offset: 0 },
   // Phase 4
-  { phase: 4, name: "Émargements matin + après-midi (à cocher par jour)", assignee: "proprio", trigger: "manual" },
+  { phase: 4, name: "Émargements matin + après-midi", assignee: "proprio", trigger: "manual", action: "request_signature", attendance: true },
   { phase: 4, name: "Exercices notés + retours individuels", assignee: "proprio", trigger: "manual" },
   { phase: 4, name: "Point d'étape fin de bloc (J3, J6, J9)", assignee: "proprio", trigger: "manual" },
   // Phase 5
@@ -77,8 +79,9 @@ export function toStepTemplateData(step: DefaultStep, order: number, ownerId: st
     triggerAnchor: step.anchor ?? null,
     triggerOffsetDays: step.trigger === "time_offset" ? (step.offset ?? 0) : null,
     actionType: step.action ?? ("checklist_only" as ActionType),
-    actionParams:
-      step.action === "send_message" && step.sendTemplate && templateIds.has(step.sendTemplate)
+    actionParams: step.attendance
+      ? { kind: "attendance" }
+      : step.action === "send_message" && step.sendTemplate && templateIds.has(step.sendTemplate)
         ? { templateId: templateIds.get(step.sendTemplate)!, recipient: step.recipient ?? "students" }
         : undefined,
   };

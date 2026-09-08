@@ -148,6 +148,16 @@ enum AttendanceSlot {
   pm
 }
 
+/// Où en est un élève sur une demi-journée. « unsigned » = présent constaté
+/// par le formateur, mais signature jamais recueillie : la demi-journée a été
+/// close et l'attestation du formateur en tient lieu.
+enum AttendanceStatus {
+  present
+  signed
+  absent
+  unsigned
+}
+
 enum SubmissionStatus {
   submitted
   graded
@@ -698,14 +708,16 @@ model Document {
 
 /// 18 émargements = 9 jours × 2 demi-journées. Immuable une fois signé.
 model Attendance {
-  id         String         @id @default(uuid()) @db.Uuid
-  sessionId  String         @map("session_id") @db.Uuid
-  userId     String         @map("user_id") @db.Uuid
-  day        DateTime       @db.Date
+  id         String           @id @default(uuid()) @db.Uuid
+  sessionId  String           @map("session_id") @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  day        DateTime         @db.Date
   slot       AttendanceSlot
-  signedAt   DateTime?      @map("signed_at")
-  documentId String?        @map("document_id") @db.Uuid
-  createdAt  DateTime       @default(now()) @map("created_at")
+  status     AttendanceStatus @default(present)
+  signedAt   DateTime?        @map("signed_at")
+  /// La feuille d'émargement de la demi-journée (une pour tout le groupe).
+  documentId String?          @map("document_id") @db.Uuid
+  createdAt  DateTime         @default(now()) @map("created_at")
 
   session  Session   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)

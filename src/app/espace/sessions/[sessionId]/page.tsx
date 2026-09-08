@@ -47,6 +47,9 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
           <Link href={`/espace/sessions/${sessionId}/documents`} className="font-medium text-brand hover:underline">
             Mes documents →
           </Link>
+          <Link href={`/espace/sessions/${sessionId}/emargements`} className="font-medium text-brand hover:underline">
+            Mes émargements →
+          </Link>
         </p>
         <p className="mt-3 text-sm text-foreground-tertiary">
           {session.name} · du {formatDate(session.startDate)} au {formatDate(session.endDate)}

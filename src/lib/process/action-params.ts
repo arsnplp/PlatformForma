@@ -19,3 +19,13 @@ export function readSendMessageParams(raw: unknown): SendMessageParams | null {
   const recipient = typeof o.recipient === "string" && RECIPIENT_KEYS.includes(o.recipient as Recipient) ? (o.recipient as Recipient) : null;
   return templateId && recipient ? { templateId, recipient } : null;
 }
+
+// Étape adossée aux émargements : elle ne se coche pas à la main, elle suit les
+// signatures réelles des demi-journées (Palier 5).
+export type AttendanceParams = { kind: "attendance" };
+
+export function isAttendanceStep(actionType: string, raw: unknown): boolean {
+  if (actionType !== "request_signature") return false;
+  if (!raw || typeof raw !== "object") return false;
+  return (raw as Record<string, unknown>).kind === "attendance";
+}

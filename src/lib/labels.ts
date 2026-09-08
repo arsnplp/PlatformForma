@@ -69,7 +69,7 @@ export const TRIGGER_ANCHOR: Record<TriggerAnchor, string> = {
 export const ACTION_TYPE: Record<ActionType, { label: string; availableFrom?: number }> = {
   checklist_only: { label: "Case à cocher" },
   send_message: { label: "Envoyer un message" },
-  request_signature: { label: "Demander une signature", availableFrom: 5 },
+  request_signature: { label: "Suivi des émargements", availableFrom: undefined },
   unlock_content: { label: "Débloquer du contenu", availableFrom: 4 },
   create_visio: { label: "Créer une visio", availableFrom: 6 },
 };

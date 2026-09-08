@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PHASES, TRIGGER_ANCHOR, STEP_STATUS } from "@/lib/labels";
-import { readSendMessageParams, RECIPIENTS } from "@/lib/process/action-params";
+import { readSendMessageParams, RECIPIENTS, isAttendanceStep } from "@/lib/process/action-params";
+import { getAttendanceState } from "@/lib/queries/attendance";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -33,6 +34,11 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
   const mailMode = getMailMode();
   const sandboxTo = mailMode === "production" ? null : getSandboxAddress();
   const hasSend = instances.some((i) => i.stepTemplate.actionType === "send_message");
+
+  // Étape adossée aux émargements : son avancement vient des signatures réelles,
+  // elle ne se coche plus à la main (spec §6.2, action request_signature).
+  const hasAttendance = instances.some((i) => isAttendanceStep(i.stepTemplate.actionType, i.stepTemplate.actionParams));
+  const attendance = hasAttendance ? await getAttendanceState(sessionId) : null;
 
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   const byPhase = PHASES.map((p) => ({ ...p, items: instances.filter((i) => i.stepTemplate.phase === p.n) })).filter((p) => p.items.length > 0);
@@ -80,6 +86,10 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
                     ? `Sur événement · ${t.triggerAnchor ? TRIGGER_ANCHOR[t.triggerAnchor] : "—"}`
                     : `Après ${t.triggerAnchor ? TRIGGER_ANCHOR[t.triggerAnchor].toLowerCase() : "—"} ${t.triggerOffsetDays && t.triggerOffsetDays !== 0 ? (t.triggerOffsetDays > 0 ? `+${t.triggerOffsetDays} j` : `${t.triggerOffsetDays} j`) : ""}`;
               const st = STEP_STATUS[i.status];
+              // Étape d'émargement : c'est la signature des demi-journées qui
+              // fait foi, pas une case cochée à la main.
+              const isAttendance = isAttendanceStep(t.actionType, t.actionParams);
+              const attendanceDone = isAttendance && attendance ? attendance.complete === attendance.total && attendance.total > 0 : false;
               return (
                 <li key={i.id} className={cn("flex items-start gap-3 px-3 py-2.5 text-sm", i.status !== "pending" && "opacity-70")}>
                   <span className="mt-0.5 w-6 shrink-0 text-right font-mono text-xs text-foreground-tertiary">{t.order}</span>
@@ -92,6 +102,11 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
                         if (t.actionType !== "send_message" || !p) return null;
                         return <span className="text-brand"> · enverra « {mailName.get(p.templateId) ?? "mail supprimé"} » à {RECIPIENTS[p.recipient].toLowerCase()}</span>;
                       })()}
+                      {isAttendance && attendance ? (
+                        <span className="text-brand">
+                          {" "}· {attendance.complete} / {attendance.total} demi-journée(s) signée(s)
+                        </span>
+                      ) : null}
                       {i.doneAt ? ` · ${i.status === "skipped" ? "passée" : "fait"} le ${formatDateTime(i.doneAt)}${i.doneBy ? ` par ${i.doneBy.name}` : ""}` : ""}
                     </p>
                   </div>
@@ -99,11 +114,17 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
                     <span className={cn("text-xs tabular-nums", i.dueDate ? (late ? "font-medium text-status-red" : "text-foreground") : "text-foreground-tertiary")}>
                       {late ? "En retard · " : ""}{dueLabel}
                     </span>
-                    <StatusBadge tone={late ? "red" : st.tone}>{st.label}</StatusBadge>
+                    {isAttendance && attendance ? (
+                      <StatusBadge tone={attendanceDone ? "green" : "yellow"}>
+                        {attendanceDone ? "Émargements complets" : "Émargements en cours"}
+                      </StatusBadge>
+                    ) : (
+                      <StatusBadge tone={late ? "red" : st.tone}>{st.label}</StatusBadge>
+                    )}
                     {!readOnly && t.actionType === "send_message" && readSendMessageParams(t.actionParams) ? (
                       <ExecuteStepButton instanceId={i.id} disabled={isDemoSession} />
                     ) : null}
-                    {!readOnly ? (
+                    {!readOnly && !isAttendance ? (
                       <span className="inline-flex items-center gap-0.5">
                         {i.status !== "done" ? (
                           <form action={setStepStatus.bind(null, i.id, "done")}>

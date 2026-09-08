@@ -18,6 +18,7 @@ import { EnrollForm } from "@/components/sessions/enroll-form";
 import { ChecklistSection } from "@/components/sessions/checklist-section";
 import { ConversationsSection } from "@/components/sessions/conversations-section";
 import { SessionDocuments } from "@/components/documents/session-documents";
+import { AttendanceSection } from "@/components/attendance/attendance-section";
 
 export default async function SessionPage({ params }: PageProps<"/admin/sessions/[id]">) {
   const { id } = await params;
@@ -123,6 +124,11 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Checklist</h2>
         <ChecklistSection sessionId={session.id} frozenAt={frozenAt} sessionStatus={session.status} isDemoSession={session.isDemo} readOnly={isCancelled} />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Émargements</h2>
+        <AttendanceSection sessionId={session.id} readOnly={isCancelled} />
       </section>
 
       <section className="space-y-4">

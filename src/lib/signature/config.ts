@@ -32,16 +32,34 @@ export function getSignwellKey(): string {
   return key;
 }
 
-// Signataire réellement sollicité. En test, c'est toujours l'adresse de test,
+// Signataire réellement sollicité. En test, c'est toujours la boîte de test,
 // et le nom rappelle qui aurait dû recevoir la demande.
-export function resolveSigner(intended: { name: string; email: string }): {
-  name: string;
-  email: string;
-  redirected: boolean;
-} {
+//
+// `key` sert quand plusieurs personnes signent le même document (feuille
+// d'émargement) : le prestataire refuse deux signataires ayant la même adresse.
+// On utilise alors le sous-adressage (« moi+cle@domaine »), qui donne des
+// adresses distinctes livrées dans la MÊME boîte de test.
+export function resolveSigner(
+  intended: { name: string; email: string },
+  key?: string,
+): { name: string; email: string; redirected: boolean } {
   if (!isSignatureTest()) return { ...intended, redirected: false };
 
   const to = process.env.MAIL_SANDBOX_TO?.trim();
   if (!to) throw new Error("MAIL_SANDBOX_TO manquante : signature de test impossible.");
-  return { name: `${intended.name} (test → ${intended.email})`, email: to, redirected: true };
+
+  return {
+    name: `${intended.name} (test → ${intended.email})`,
+    email: key ? withSubAddress(to, key) : to,
+    redirected: true,
+  };
+}
+
+function withSubAddress(address: string, key: string): string {
+  const at = address.lastIndexOf("@");
+  if (at <= 0) return address;
+  const local = address.slice(0, at).split("+")[0];
+  const domain = address.slice(at + 1);
+  const tag = key.replace(/[^a-zA-Z0-9]/g, "").slice(0, 20) || "signataire";
+  return `${local}+${tag}@${domain}`;
 }
