@@ -150,15 +150,18 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 
 ## Relevés de temps et activité simulée
 
-- [ ] **Rétablir la mention « contient des données simulées » sur le relevé PDF**
-      avant que ces relevés ne sortent de la plateforme — remis à un élève,
-      joint à un dossier, transmis à un financeur ou à un auditeur.
-      Aujourd'hui la part simulée se lit uniquement dans l'application, sur la
-      fiche de l'élève, et seulement par un super-administrateur : le PDF, lui,
-      ne distingue pas les heures mesurées des heures fabriquées.
-      Un seul endroit à modifier : `src/lib/export/time-sheet-pdf.ts`, le bloc
-      qui teste `report.session.isDemo` (le champ `report.simulated` est déjà
-      calculé et disponible).
+- [ ] **Rétablir les mentions d'origine sur le relevé PDF** avant que ces
+      relevés ne sortent de la plateforme — remis à un élève, joint à un
+      dossier, transmis à un financeur ou à un auditeur. Deux mentions ont été
+      retirées : « contient des données simulées » et « données de
+      démonstration ». Aujourd'hui ces informations se lisent uniquement dans
+      l'application, sur la fiche de l'élève, et seulement par un
+      super-administrateur : le PDF ne distingue pas les heures mesurées des
+      heures fabriquées, ni une session réelle d'une session de démonstration.
+      Un seul fichier à modifier, `src/lib/export/time-sheet-pdf.ts` :
+      `report.simulated` et `report.session.isDemo` y sont déjà calculés.
+      À noter : l'export ZIP filigrane toujours les pièces d'une session de
+      démonstration, ce chemin-là reste couvert.
 - [ ] Décider si le générateur d'activité doit rester accessible une fois la
       plateforme ouverte à d'autres formateurs. Il est réservé à
       `can_generate_demo_data`, que seul le super-administrateur possède.

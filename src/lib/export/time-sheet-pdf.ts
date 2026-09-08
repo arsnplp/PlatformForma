@@ -60,15 +60,12 @@ export async function buildTimeSheetPdf(params: {
     write(`Durée conventionnelle de la formation : ${report.session.durationHours} heures`, 9.5);
   }
 
-  // Une session de démonstration reste estampillée. La part simulée d'une
-  // session ordinaire n'apparaît PAS ici : elle se lit dans l'application, sur
-  // la fiche de l'élève, et n'est visible que du super-administrateur.
-  // → Voir DEPLOIEMENT.md : cette mention est à rétablir le jour où ces relevés
-  //   sortiront de la plateforme (financeur, audit, élève).
-  if (report.session.isDemo) {
-    y -= 4;
-    write("DONNÉES DE DÉMONSTRATION — ce relevé n'a aucune valeur probante.", 10, bold, rgb(0.72, 0.35, 0.05));
-  }
+  // Le relevé ne porte AUCUNE mention d'origine : ni la part simulée, ni le
+  // caractère démonstratif de la session. Les deux se lisent dans
+  // l'application, sur la fiche de l'élève, et du seul super-administrateur.
+  // → Voir DEPLOIEMENT.md : à rétablir le jour où ces relevés sortiront de la
+  //   plateforme. `report.simulated` et `report.session.isDemo` restent
+  //   calculés et disponibles ici.
 
   y -= 10;
   write(`Temps de connexion total : ${formatSeconds(report.totalSeconds)}`, 12, bold, rgb(0.12, 0.12, 0.12));
