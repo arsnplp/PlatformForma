@@ -4,15 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { isOwnerOrSupervisor, canSupervise } from "@/lib/auth/ownership";
 import { archiveCompany, restoreCompany } from "@/lib/actions/companies";
-import { archiveProspect, restoreProspect } from "@/lib/actions/prospects";
-import { PROSPECT_STATUS } from "@/lib/labels";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
 import { CompanyDocuments } from "@/components/documents/company-documents";
 import { StatusBadge } from "@/components/admin/status-badge";
-import { EmptyState } from "@/components/admin/empty-state";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 
 export default async function CompanyPage({ params }: PageProps<"/admin/entreprises/[id]">) {
@@ -24,7 +20,6 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
     where: { id },
     include: {
       owner: { select: { name: true } },
-      prospects: { orderBy: { createdAt: "desc" } },
       _count: { select: { sessions: true } },
     },
   });
@@ -67,7 +62,7 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
               <ConfirmButton
                 action={archiveCompany.bind(null, company.id)}
                 title="Archiver cette entreprise ?"
-                description="Elle quitte les listes actives. Ses prospects, sessions et documents restent intacts et consultables."
+                description="Elle quitte les listes actives. Ses sessions et ses documents restent intacts et consultables."
                 confirmLabel="Archiver"
               >
                 Archiver
@@ -102,74 +97,6 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
           Conventions, devis, factures. Pièces de l&apos;entreprise : aucun élève n&apos;y a accès.
         </p>
         <CompanyDocuments companyId={company.id} readOnly={isArchived} />
-      </section>
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Prospects</h2>
-          {!isArchived ? (
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/admin/prospects/nouveau?companyId=${company.id}`}>Nouveau prospect</Link>
-            </Button>
-          ) : null}
-        </div>
-
-        {company.prospects.length === 0 ? (
-          <EmptyState title="Aucun prospect pour cette entreprise" />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Statut</TableHead>
-                <TableHead>Premier appel</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {company.prospects.map((p) => {
-                const s = PROSPECT_STATUS[p.status];
-                const pArchived = Boolean(p.archivedAt);
-                return (
-                  <TableRow key={p.id} className={pArchived ? "opacity-60" : undefined}>
-                    <TableCell>
-                      <span className="flex items-center gap-2">
-                        <StatusBadge tone={s.tone}>{s.label}</StatusBadge>
-                        {pArchived ? <StatusBadge tone="purple">Archivé</StatusBadge> : null}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-foreground-secondary">{formatDateTime(p.firstCallAt)}</TableCell>
-                    <TableCell className="max-w-xs truncate text-foreground-secondary">{p.notes ?? "—"}</TableCell>
-                    <TableCell className="text-right">
-                      {isArchived ? null : (
-                      <span className="inline-flex items-center gap-1">
-                        {pArchived ? (
-                          <form action={restoreProspect.bind(null, p.id)}>
-                            <Button type="submit" variant="ghost" size="sm">Restaurer</Button>
-                          </form>
-                        ) : (
-                          <>
-                            <Button asChild variant="ghost" size="sm">
-                              <Link href={`/admin/prospects/${p.id}/modifier`}>Modifier</Link>
-                            </Button>
-                            <ConfirmButton
-                              action={archiveProspect.bind(null, p.id)}
-                              title="Archiver ce prospect ?"
-                              confirmLabel="Archiver"
-                              variant="ghost"
-                            >
-                              Archiver
-                            </ConfirmButton>
-                          </>
-                        )}
-                      </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
       </section>
     </div>
   );

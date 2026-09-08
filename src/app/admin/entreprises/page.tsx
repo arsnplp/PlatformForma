@@ -20,7 +20,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
     where: { ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }), ...ownerFilter(me) },
     include: {
       owner: { select: { name: true } },
-      _count: { select: { prospects: { where: { archivedAt: null } }, sessions: true } },
+      _count: { select: { sessions: true } },
     },
     orderBy: archived ? { archivedAt: "desc" } : { name: "asc" },
   });
@@ -32,7 +32,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
         description={
           supervisor
             ? "Toutes les entreprises, tous formateurs confondus. Une entreprise archivée reste consultable."
-            : "Tes clients et prospects. Une entreprise archivée reste consultable et garde son historique."
+            : "Tes entreprises clientes. Une entreprise archivée reste consultable et garde son historique."
         }
         actions={
           <Button asChild>
@@ -55,7 +55,6 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
               <TableHead>Secteur</TableHead>
               <TableHead>Contact</TableHead>
               {supervisor ? <TableHead>Propriétaire</TableHead> : null}
-              <TableHead className="text-right">Prospects</TableHead>
               <TableHead className="text-right">Sessions</TableHead>
               <TableHead className="text-right">{archived ? "Archivée le" : "Créée le"}</TableHead>
             </TableRow>
@@ -74,7 +73,6 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
                   {c.contactEmail ? <span className="block text-xs text-foreground-tertiary">{c.contactEmail}</span> : null}
                 </TableCell>
                 {supervisor ? <TableCell className="text-foreground-secondary">{c.owner.name}</TableCell> : null}
-                <TableCell className="text-right tabular-nums">{c._count.prospects}</TableCell>
                 <TableCell className="text-right tabular-nums">{c._count.sessions}</TableCell>
                 <TableCell className="text-right text-foreground-secondary">
                   {formatDate(archived ? c.archivedAt : c.createdAt)}
