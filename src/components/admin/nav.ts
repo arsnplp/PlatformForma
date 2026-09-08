@@ -9,6 +9,4 @@ export const ADMIN_NAV: { label: string; href: string; permission?: PermissionKe
   { label: "Envois", href: "/admin/envois", permission: "can_manage_sessions" },
   { label: "Entreprises", href: "/admin/entreprises", permission: "can_manage_companies" },
   { label: "Utilisateurs", href: "/admin/utilisateurs", permission: "can_manage_users" },
-  { label: "Démo", href: "/admin/demo", permission: "can_generate_demo_data" },
-  { label: "Design", href: "/admin/design", permission: "can_generate_demo_data" },
 ];
