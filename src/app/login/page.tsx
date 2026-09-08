@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser, landingFor } from "@/lib/auth/session";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata = { title: "Connexion" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const user = await getCurrentUser();
-  if (user) redirect("/admin");
+  if (user) redirect(landingFor(user));
 
   const { next, invitation } = await searchParams;
   const nextPath = typeof next === "string" ? next : undefined;

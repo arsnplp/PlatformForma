@@ -5,9 +5,9 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/auth/session";
-import { canSupervise } from "@/lib/auth/ownership";
+import { canSupervise, assertOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendInvitation } from "@/lib/auth/invitation";
+import { sendInvitation, sendCompanyInvitation } from "@/lib/auth/invitation";
 import { parseForm, fieldError, emptyToNull, type FormState } from "./shared";
 
 export type AccountState =
@@ -109,6 +109,11 @@ const studentSchema = z.object({
 
 // Créer un élève depuis la liste des élèves, sans passer par une session.
 // Son inscription à une session vient ensuite, depuis la fiche de session.
+const contactSchema = z.object({
+  name: z.string().trim().min(1, "Nom du contact requis").max(120),
+  email: z.string().trim().toLowerCase().email("Email invalide"),
+});
+
 export async function createStudent(_prev: AccountState, formData: FormData): Promise<AccountState> {
   const me = await requirePermission("can_manage_sessions");
   const parsed = parseForm(studentSchema, formData);
@@ -163,4 +168,41 @@ export async function setStudentCompany(userId: string, formData: FormData) {
   }
   await prisma.user.update({ where: { id: userId }, data: { companyId } });
   revalidatePath(`/admin/eleves/${userId}`);
+}
+
+// Ouvre l'accès du contact d'une entreprise. Son compte n'a aucune permission :
+// son périmètre tient dans son rattachement à l'entreprise, jamais dans un droit.
+export async function inviteCompanyContact(companyId: string, _prev: AccountState, formData: FormData): Promise<AccountState> {
+  const me = await requirePermission("can_manage_companies");
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, name: true, ownerId: true, contactName: true, contactEmail: true, archivedAt: true },
+  });
+  if (!company) return fieldError(formData, "email", "Entreprise introuvable");
+  assertOwnerOrSupervisor(me, company.ownerId);
+  if (company.archivedAt) return fieldError(formData, "email", "Entreprise archivée");
+
+  const parsed = parseForm(contactSchema, formData);
+  if (!parsed.ok) return parsed.state;
+  const { name, email } = parsed.data;
+
+  const created = await createAccount({ name, email, roleKey: "entreprise", companyId: company.id, actor: me });
+  if (!created.ok) return fieldError(formData, "email", created.error);
+
+  // La fiche garde le contact à jour : c'est lui qu'on sollicitera pour signer.
+  await prisma.company.update({ where: { id: company.id }, data: { contactName: name, contactEmail: email } });
+
+  const invitation = await sendCompanyInvitation({
+    contact: { id: created.userId, name, email },
+    companyName: company.name,
+    trainer: { name: me.name, email: me.email },
+    actorId: me.id,
+  });
+
+  revalidatePath(`/admin/entreprises/${company.id}`);
+  return {
+    created: invitation.ok
+      ? { email, invited: true, sentTo: invitation.sentTo, sandbox: invitation.sandbox }
+      : { email, invited: false, error: invitation.error },
+  };
 }

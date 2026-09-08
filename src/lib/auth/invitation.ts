@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendMail } from "@/lib/mail/send";
 import { renderMessage } from "@/lib/messages/render";
-import { INVITATION_TEMPLATE } from "@/lib/messages/invitation";
+import { INVITATION_TEMPLATE, COMPANY_INVITATION_TEMPLATE } from "@/lib/messages/invitation";
 import { appUrl } from "@/lib/app-url";
 
 // Invitation d'un élève (spec §4) : on ne transmet JAMAIS de mot de passe.
@@ -64,6 +64,42 @@ export async function sendInvitation(params: {
   // Trace d'audit : qui a invité qui, et quand (spec §12).
   await prisma.accessLog.create({
     data: { userId: params.actorId, action: "invite_student", targetType: "user", targetId: params.student.id },
+  });
+
+  return { ok: true, sentTo: result.sentTo, sandbox: result.redirected };
+}
+
+// Invitation d'un contact entreprise. Même mécanique que pour un élève — jeton
+// à usage unique, jamais de mot de passe transmis — mais un autre message :
+// il n'entre pas dans un espace de cours, il entre dans le dossier de sa société.
+export async function sendCompanyInvitation(params: {
+  contact: { id: string; name: string; email: string };
+  companyName: string;
+  trainer: { name: string; email: string | null };
+  actorId: string;
+}): Promise<InvitationResult> {
+  const built = await buildActivationLink(params.contact.email);
+  if ("error" in built) return { ok: false, error: built.error };
+
+  const rendered = renderMessage(COMPANY_INVITATION_TEMPLATE, {
+    "contact.prenom": firstName(params.contact.name),
+    "contact.nom": params.contact.name,
+    "entreprise.nom": params.companyName,
+    "formateur.nom": params.trainer.name,
+    "formateur.email": params.trainer.email ?? "",
+    lien_activation: built.link,
+  });
+
+  const result = await sendMail({
+    intendedTo: params.contact.email,
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+
+  await prisma.accessLog.create({
+    data: { userId: params.actorId, action: "invite_company_contact", targetType: "user", targetId: params.contact.id },
   });
 
   return { ok: true, sentTo: result.sentTo, sandbox: result.redirected };

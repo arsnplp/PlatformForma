@@ -8,6 +8,10 @@ import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { CompanyDocuments } from "@/components/documents/company-documents";
+import { SlotGrid } from "@/components/documents/slot-grid";
+import { SlotCreate } from "@/components/documents/slot-create";
+import { InviteContactForm } from "@/components/admin/invite-contact-form";
+import { listCompanySlots } from "@/lib/queries/slots";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { ConfirmButton } from "@/components/admin/confirm-button";
 
@@ -26,6 +30,13 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
   // Une entreprise d'un autre formateur n'existe pas pour moi (cloisonnement).
   if (!company || !isOwnerOrSupervisor(me, company.ownerId)) notFound();
   const isArchived = Boolean(company.archivedAt);
+
+  // Le contact qui a déjà un accès, s'il existe : un seul suffit par entreprise.
+  const contact = await prisma.user.findFirst({
+    where: { companyId: company.id, userRoles: { some: { role: { key: "entreprise" } } }, archivedAt: null },
+    select: { name: true, email: true, createdAt: true },
+  });
+  const slots = await listCompanySlots(company.id);
 
   const info: [string, string | null][] = [
     ["SIRET", company.siret],
@@ -91,10 +102,47 @@ export default async function CompanyPage({ params }: PageProps<"/admin/entrepri
         ) : null}
       </dl>
 
+      {/* ─── Accès du contact ───────────────────────────────────────────── */}
+      {!isArchived ? (
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Accès à l&apos;espace entreprise</h2>
+          {contact ? (
+            <p className="text-sm text-foreground-secondary">
+              <strong className="text-foreground">{contact.name}</strong> ({contact.email}) a son accès depuis le{" "}
+              {formatDate(contact.createdAt)}. Il voit les formations de vos salariés et le dossier
+              de l&apos;entreprise, jamais leur travail.
+            </p>
+          ) : (
+            <InviteContactForm
+              companyId={company.id}
+              defaultName={company.contactName}
+              defaultEmail={company.contactEmail}
+            />
+          )}
+        </section>
+      ) : null}
+
+      {/* ─── Espace commun avec l'entreprise ────────────────────────────── */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Documents</h2>
+        <div>
+          <h2 className="text-xl font-semibold">Espace commun — ce que j&apos;attends de l&apos;entreprise</h2>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            Un emplacement par pièce attendue. Point rouge : la balle est dans son camp.
+          </p>
+        </div>
+        <SlotGrid
+          slots={slots}
+          role="staff"
+          emptyLabel="Aucune demande en cours pour cette entreprise."
+        />
+        {!isArchived ? <SlotCreate holder={{ companyId: company.id }} /> : null}
+      </section>
+
+      {/* ─── Pièces déposées par le formateur ───────────────────────────── */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Pièces que je dépose au dossier</h2>
         <p className="-mt-2 text-sm text-foreground-secondary">
-          Conventions, devis, factures. Pièces de l&apos;entreprise : aucun élève n&apos;y a accès.
+          Conventions, devis, factures. Aucun élève n&apos;y a accès.
         </p>
         <CompanyDocuments companyId={company.id} readOnly={isArchived} />
       </section>

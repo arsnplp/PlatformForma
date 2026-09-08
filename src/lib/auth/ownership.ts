@@ -26,3 +26,10 @@ export function assertOwnerOrSupervisor(user: CurrentUser, ownerId: string): voi
     throw new Error("Accès refusé : cette ressource appartient à un autre formateur");
   }
 }
+
+// Contact entreprise : le dirigeant ou le RH qui suit le dossier de sa société.
+// Ce n'est pas une permission mais un rôle d'appartenance — son périmètre tient
+// dans son rattachement (User.companyId), jamais dans un droit transversal.
+export function isCompanyContact(user: CurrentUser): boolean {
+  return user.roles.some((r) => r.key === "entreprise");
+}

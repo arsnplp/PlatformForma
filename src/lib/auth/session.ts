@@ -64,3 +64,12 @@ export async function requirePermission(key: PermissionKey): Promise<CurrentUser
   if (!hasPermission(user, key)) throw new Error(`Permission manquante : ${key}`);
   return user;
 }
+
+// Où atterrit quelqu'un qui n'a rien demandé de précis : le personnel au
+// back-office, le contact entreprise dans l'espace de sa société, l'élève
+// dans le sien.
+export function landingFor(user: CurrentUser | null): string {
+  if (!user) return "/login";
+  if (hasPermission(user, "can_access_backoffice")) return "/admin";
+  return user.roles.some((r) => r.key === "entreprise") ? "/entreprise" : "/espace";
+}

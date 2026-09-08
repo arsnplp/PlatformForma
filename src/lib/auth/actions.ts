@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, hasPermission, requirePermission } from "./session";
+import { getCurrentUser, landingFor, requirePermission } from "./session";
 
 export type ActionState = { error?: string } | undefined;
 
@@ -28,7 +28,7 @@ export async function login(_prev: ActionState, formData: FormData): Promise<Act
 
   // Sans destination demandée : le personnel va au back-office, l'élève dans son espace.
   const me = await getCurrentUser();
-  redirect(me && hasPermission(me, "can_access_backoffice") ? "/admin" : "/espace");
+  redirect(landingFor(me));
 }
 
 export async function logout() {
