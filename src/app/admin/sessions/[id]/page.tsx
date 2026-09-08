@@ -8,6 +8,8 @@ import { enrollStudent, setEnrollmentStatus } from "@/lib/actions/enrollments";
 import { listMyStudents } from "@/lib/queries/users";
 import { SESSION_STATUS, ENROLLMENT_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDuration, durationGap } from "@/lib/content/duration";
+import { programMinutes } from "@/lib/queries/program-duration";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
@@ -19,6 +21,7 @@ import { ChecklistSection } from "@/components/sessions/checklist-section";
 import { ConversationsSection } from "@/components/sessions/conversations-section";
 import { SessionDocuments } from "@/components/documents/session-documents";
 import { AttendanceSection } from "@/components/attendance/attendance-section";
+import { GeneratePlan } from "@/components/sessions/generate-plan";
 
 export default async function SessionPage({ params }: PageProps<"/admin/sessions/[id]">) {
   const { id } = await params;
@@ -50,6 +53,11 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
   const frozenAt = snapshot?.frozenAt ?? null;
   const candidates = students.filter((s) => !enrolledIds.has(s.id));
 
+  // La durée annoncée sur la session est la mention officielle (convocation,
+  // attestation). On la confronte à la durée réelle du programme : un écart
+  // notable est exactement ce qu'un auditeur relève.
+  const gap = durationGap(session.durationHours, await programMinutes(fv.id));
+
   const info: [string, React.ReactNode][] = [
     [
       "Formation",
@@ -62,7 +70,20 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
     ["Entreprise", session.company ? <Link key="c" href={`/admin/entreprises/${session.company.id}`} className="hover:underline">{session.company.name}</Link> : "—"],
     ["Formateur", session.trainer?.name ?? "—"],
     ["Dates", `${formatDate(session.startDate)} → ${formatDate(session.endDate)}`],
-    ["Durée", session.durationHours ? `${session.durationHours} heures` : <span key="d" className="text-status-orange">À renseigner (mention Qualiopi)</span>],
+    [
+      "Durée",
+      session.durationHours ? (
+        <span key="d">
+          {session.durationHours} heures
+          <span className={gap.significant ? "ml-2 text-status-orange" : "ml-2 text-foreground-tertiary"}>
+            · programme : {formatDuration(gap.programHours * 60)}
+            {gap.significant ? " — écart à vérifier" : ""}
+          </span>
+        </span>
+      ) : (
+        <span key="d" className="text-status-orange">À renseigner (mention Qualiopi)</span>
+      ),
+    ],
     ["Process", frozenAt ? `Figé le ${formatDateTime(frozenAt)}` : "Suit le modèle jusqu'au démarrage"],
   ];
   if (canSupervise(me)) info.push(["Propriétaire", session.owner.name]);
@@ -135,7 +156,10 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Dossier documentaire</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold">Dossier documentaire</h2>
+          {!isCancelled ? <GeneratePlan sessionId={session.id} /> : null}
+        </div>
         <SessionDocuments sessionId={session.id} companyId={session.company?.id ?? null} readOnly={isCancelled} />
       </section>
 

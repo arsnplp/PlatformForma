@@ -13,8 +13,10 @@ export type SheetInput = {
   formationName: string;
   sessionName: string;
   companyName: string | null;
-  day: Date;
-  slot: "am" | "pm";
+  /// Intitulé de la séance de visio émargée.
+  seanceTitle: string;
+  startsAt: Date;
+  durationMinutes: number;
   trainerName: string;
   durationHours: number | null;
   participants: SheetParticipant[];
@@ -30,11 +32,18 @@ const ROW_HEIGHT = 46;
 const SIGNATURE_COLUMN_X = 330;
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", { dateStyle: "full", timeZone: "Europe/Paris" });
-const SLOT_LABEL = { am: "Matin (9h00 – 12h30)", pm: "Après-midi (13h30 – 17h00)" } as const;
+const hourFmt = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
+
+// « mardi 15 septembre 2026 — 9h00, 2 h » : ce que l'auditeur doit lire en tête
+// de feuille pour situer la séance.
+function seanceLine(input: SheetInput): string {
+  const end = new Date(input.startsAt.getTime() + input.durationMinutes * 60_000);
+  return `${dateFmt.format(input.startsAt)} — ${hourFmt.format(input.startsAt)} à ${hourFmt.format(end)}`;
+}
 
 export async function buildAttendanceSheet(input: SheetInput): Promise<{ pdf: Uint8Array; zones: SignatureZone[] }> {
   const doc = await PDFDocument.create();
-  doc.setTitle(`Émargement — ${input.sessionName} — ${dateFmt.format(input.day)}`);
+  doc.setTitle(`Émargement — ${input.seanceTitle} — ${dateFmt.format(input.startsAt)}`);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
@@ -101,16 +110,17 @@ function header(page: PDFPage, font: PDFFont, bold: PDFFont, input: SheetInput, 
   let y = A4.height - MARGIN;
 
   page.drawText("Feuille d'émargement", { x: MARGIN, y, size: 18, font: bold, color: rgb(0.12, 0.12, 0.12) });
-  y -= 26;
-  page.drawText(`${dateFmt.format(input.day)} — ${SLOT_LABEL[input.slot]}`, {
-    x: MARGIN, y, size: 11, font: bold, color: rgb(0.25, 0.25, 0.25),
-  });
+  y -= 24;
+  page.drawText(input.seanceTitle, { x: MARGIN, y, size: 12, font: bold, color: rgb(0.2, 0.2, 0.2) });
+  y -= 16;
+  page.drawText(seanceLine(input), { x: MARGIN, y, size: 10, font: bold, color: rgb(0.3, 0.3, 0.3) });
   y -= 24;
 
   const lines = [
     `Formation : ${input.formationName}`,
     `Session : ${input.sessionName}${input.companyName ? ` — ${input.companyName}` : ""}`,
     `Formateur : ${input.trainerName}`,
+    `Durée de la séance : ${Math.round(input.durationMinutes)} minutes`,
     input.durationHours ? `Durée totale de la formation : ${input.durationHours} heures` : null,
     "Modalité : formation ouverte et à distance (FOAD), en classe virtuelle",
   ].filter((l): l is string => Boolean(l));
@@ -170,17 +180,17 @@ export async function buildAttendanceCertificate(
   input: SheetInput & { lines: CertificateLine[] },
 ): Promise<{ pdf: Uint8Array; zone: SignatureZone }> {
   const doc = await PDFDocument.create();
-  doc.setTitle(`Attestation de présence — ${input.sessionName} — ${dateFmt.format(input.day)}`);
+  doc.setTitle(`Attestation de présence — ${input.seanceTitle} — ${dateFmt.format(input.startsAt)}`);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const page = doc.addPage([A4.width, A4.height]);
 
   let y = A4.height - MARGIN;
   page.drawText("Attestation de présence", { x: MARGIN, y, size: 18, font: bold, color: rgb(0.12, 0.12, 0.12) });
-  y -= 26;
-  page.drawText(`${dateFmt.format(input.day)} — ${SLOT_LABEL[input.slot]}`, {
-    x: MARGIN, y, size: 11, font: bold, color: rgb(0.25, 0.25, 0.25),
-  });
+  y -= 24;
+  page.drawText(input.seanceTitle, { x: MARGIN, y, size: 12, font: bold, color: rgb(0.2, 0.2, 0.2) });
+  y -= 16;
+  page.drawText(seanceLine(input), { x: MARGIN, y, size: 10, font: bold, color: rgb(0.3, 0.3, 0.3) });
   y -= 26;
 
   for (const line of [
@@ -207,7 +217,7 @@ export async function buildAttendanceCertificate(
   }
 
   y -= 10;
-  const statement = `Je soussigné(e) ${input.trainerName}, formateur de cette session, atteste de l'exactitude des présences constatées ci-dessus pour cette demi-journée.`;
+  const statement = `Je soussigné(e) ${input.trainerName}, formateur de cette session, atteste de l'exactitude des présences constatées ci-dessus pour cette séance.`;
   for (const chunk of wrap(statement, 95)) {
     page.drawText(chunk, { x: MARGIN, y, size: 9.5, font, color: rgb(0.25, 0.25, 0.25) });
     y -= 14;

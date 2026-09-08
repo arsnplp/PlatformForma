@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Prose } from "./prose";
-import { readText, readFile, readEmbed } from "@/lib/content/block-payload";
+import { readText, readFile, readEmbed, readVisio } from "@/lib/content/block-payload";
+import { formatDuration } from "@/lib/content/duration";
+import { SeanceCard, type SeanceView } from "./seance-card";
 import { formatBytes } from "@/lib/storage/config";
 import type { ContentBlockType } from "@/generated/prisma/enums";
 
@@ -10,8 +12,25 @@ export type ViewBlock = { id: string; type: ContentBlockType; payload: unknown }
 // l'espace élève : ce que voit le formateur est ce que verra l'apprenant.
 // Les fichiers passent tous par /api/fichiers/[blockId], qui vérifie les
 // droits avant de délivrer une URL signée de 60 secondes.
-export function BlockView({ block }: { block: ViewBlock }) {
+export function BlockView({ block, seance, now = 0 }: { block: ViewBlock; seance?: SeanceView | null; now?: number }) {
   const src = `/api/fichiers/${block.id}`;
+
+  // Séance de visio : dans une session, elle affiche son horaire, son lien et
+  // l'émargement ; hors session (aperçu du modèle), seulement ce qu'elle prévoit.
+  if (block.type === "visio") {
+    const visio = readVisio(block.payload);
+    if (!visio) return <MissingFile label="Séance mal configurée" />;
+    if (seance) return <SeanceCard visio={visio} seance={seance} now={now} />;
+    return (
+      <div className="my-4 rounded-md border border-dashed px-4 py-3">
+        <p className="font-medium">{visio.title}</p>
+        <p className="text-sm text-foreground-secondary">
+          Classe virtuelle · {formatDuration(visio.durationMinutes)} · date et lien définis par session
+        </p>
+        {visio.note ? <p className="mt-1 text-sm text-foreground-tertiary">{visio.note}</p> : null}
+      </div>
+    );
+  }
 
   if (block.type === "image") {
     const file = readFile(block.payload);

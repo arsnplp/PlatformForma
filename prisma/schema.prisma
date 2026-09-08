@@ -57,6 +57,10 @@ enum ContentBlockType {
   callout
   quiz_ref
   exercise_ref
+  /// Séance en classe virtuelle : un rendez-vous, pas un contenu à consulter.
+  /// Le bloc définit la séance (titre, durée) ; sa date et son lien sont
+  /// propres à chaque session (modèle Seance).
+  visio
 }
 
 enum ExerciseType {
@@ -411,6 +415,9 @@ model Lesson {
   moduleId  String   @map("module_id") @db.Uuid
   order     Int
   title     String
+  /// Durée pédagogique saisie par le formateur. Le module et la formation
+  /// additionnent : une seule saisie, donc aucun chiffre contradictoire.
+  durationMinutes Int? @map("duration_minutes")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -436,8 +443,34 @@ model ContentBlock {
 
   lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
 
+  seances Seance[]
+
   @@unique([lessonId, order])
   @@map("content_blocks")
+}
+
+/// Séance de visio d'UNE session : le bloc dit quoi et combien de temps, la
+/// séance dit quand et où. Le contenu est versionné et partagé par plusieurs
+/// sessions ; la date et le lien, eux, appartiennent à la session.
+model Seance {
+  id              String   @id @default(uuid()) @db.Uuid
+  sessionId       String   @map("session_id") @db.Uuid
+  contentBlockId  String   @map("content_block_id") @db.Uuid
+  startsAt        DateTime @map("starts_at")
+  durationMinutes Int      @map("duration_minutes")
+  /// Lien de la classe virtuelle, collé par le formateur (Meet, Zoom…).
+  joinUrl         String   @map("join_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  session      Session      @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  contentBlock ContentBlock @relation(fields: [contentBlockId], references: [id], onDelete: Restrict)
+
+  attendances Attendance[]
+
+  @@unique([sessionId, contentBlockId])
+  @@index([sessionId, startsAt])
+  @@map("seances")
 }
 
 /// Rattaché à un module OU à une leçon (exactement l'un des deux, garanti côté applicatif).
@@ -502,6 +535,7 @@ model Session {
   stepInstances  StepInstance[]
   documents      Document[]
   attendances    Attendance[]
+  seances        Seance[]
   conversations  Conversation[]
   submissions    Submission[]
   activityLogs   ActivityLog[]
@@ -711,6 +745,10 @@ model Attendance {
   id         String           @id @default(uuid()) @db.Uuid
   sessionId  String           @map("session_id") @db.Uuid
   userId     String           @map("user_id") @db.Uuid
+  /// La séance de visio émargée. Ce sont les séances qui définissent les
+  /// feuilles : douze visios, douze émargements.
+  seanceId   String?          @map("seance_id") @db.Uuid
+  /// Jour civil de la séance, conservé pour le classement et l'audit.
   day        DateTime         @db.Date
   slot       AttendanceSlot
   status     AttendanceStatus @default(present)
@@ -722,7 +760,9 @@ model Attendance {
   session  Session   @relation(fields: [sessionId], references: [id], onDelete: Restrict)
   user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
   document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  seance   Seance?   @relation(fields: [seanceId], references: [id], onDelete: Restrict)
 
+  @@unique([seanceId, userId])
   @@unique([sessionId, userId, day, slot])
   @@index([userId])
   @@map("attendances")

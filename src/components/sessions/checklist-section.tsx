@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PHASES, TRIGGER_ANCHOR, STEP_STATUS } from "@/lib/labels";
 import { readSendMessageParams, RECIPIENTS, isAttendanceStep } from "@/lib/process/action-params";
-import { getAttendanceState } from "@/lib/queries/attendance";
+import { getSessionSeances } from "@/lib/queries/seances";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -38,7 +38,15 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
   // Étape adossée aux émargements : son avancement vient des signatures réelles,
   // elle ne se coche plus à la main (spec §6.2, action request_signature).
   const hasAttendance = instances.some((i) => isAttendanceStep(i.stepTemplate.actionType, i.stepTemplate.actionParams));
-  const attendance = hasAttendance ? await getAttendanceState(sessionId) : null;
+  const seanceState = hasAttendance ? await getSessionSeances(sessionId) : null;
+  const attendance = seanceState
+    ? {
+        total: seanceState.seances.length,
+        complete: seanceState.seances.filter(
+          (s) => s.opened && s.present === 0 && (seanceState.isDemo || s.signatureStatus === "signed"),
+        ).length,
+      }
+    : null;
 
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   const byPhase = PHASES.map((p) => ({ ...p, items: instances.filter((i) => i.stepTemplate.phase === p.n) })).filter((p) => p.items.length > 0);
@@ -104,7 +112,7 @@ export async function ChecklistSection({ sessionId, frozenAt, sessionStatus, isD
                       })()}
                       {isAttendance && attendance ? (
                         <span className="text-brand">
-                          {" "}· {attendance.complete} / {attendance.total} demi-journée(s) signée(s)
+                          {" "}· {attendance.complete} / {attendance.total} séance(s) émargée(s)
                         </span>
                       ) : null}
                       {i.doneAt ? ` · ${i.status === "skipped" ? "passée" : "fait"} le ${formatDateTime(i.doneAt)}${i.doneBy ? ` par ${i.doneBy.name}` : ""}` : ""}

@@ -13,6 +13,7 @@ import {
   removeModule,
   addLesson,
   removeLesson,
+  setLessonDuration,
 } from "@/lib/actions/formations";
 import { FORMATION_VERSION_STATUS, SESSION_STATUS, ENROLLMENT_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDuration } from "@/lib/content/duration";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -226,6 +228,9 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                       <p className="font-medium">
                         <span className="mr-2 text-foreground-tertiary tabular-nums">{m.order}.</span>
                         {m.title}
+                        <span className="ml-2 text-xs font-normal text-foreground-tertiary">
+                          {formatDuration(m.lessons.reduce((n, l) => n + (l.durationMinutes ?? 0), 0))}
+                        </span>
                       </p>
                       {canEditContent ? (
                         <form action={removeModule.bind(null, m.id)}>
@@ -243,14 +248,30 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                                 {l.title}
                               </Link>
                               <span className="ml-2 text-xs text-foreground-tertiary">
-                                {l._count.contentBlocks} bloc(s)
+                                {l._count.contentBlocks} bloc(s) · {formatDuration(l.durationMinutes)}
                               </span>
                             </span>
-                            {canEditContent ? (
-                              <form action={removeLesson.bind(null, l.id)}>
-                                <Button type="submit" variant="ghost" size="sm" className="h-7 text-foreground-tertiary">Retirer</Button>
-                              </form>
-                            ) : null}
+                            <span className="flex shrink-0 items-center gap-1">
+                              {canEditContent ? (
+                                <form action={setLessonDuration.bind(null, l.id)} className="flex items-center gap-1">
+                                  <Input
+                                    name="durationMinutes"
+                                    type="number"
+                                    min={0}
+                                    defaultValue={l.durationMinutes ?? ""}
+                                    placeholder="min"
+                                    className="h-7 w-20"
+                                    aria-label={`Durée de ${l.title} en minutes`}
+                                  />
+                                  <Button type="submit" variant="ghost" size="sm" className="h-7">Durée</Button>
+                                </form>
+                              ) : null}
+                              {canEditContent ? (
+                                <form action={removeLesson.bind(null, l.id)}>
+                                  <Button type="submit" variant="ghost" size="sm" className="h-7 text-foreground-tertiary">Retirer</Button>
+                                </form>
+                              ) : null}
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -258,6 +279,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                     {canEditContent ? (
                       <form action={addLesson.bind(null, m.id)} className="mt-3 flex gap-2 pl-6">
                         <Input name="title" placeholder="Nouvelle leçon" required className="h-8 max-w-sm" />
+                        <Input name="durationMinutes" type="number" min={0} placeholder="min" className="h-8 w-24" aria-label="Durée en minutes" />
                         <Button type="submit" variant="outline" size="sm">Ajouter</Button>
                       </form>
                     ) : null}

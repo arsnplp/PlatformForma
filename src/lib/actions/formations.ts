@@ -230,7 +230,29 @@ export async function addLesson(moduleId: string, formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
   const last = await prisma.lesson.findFirst({ where: { moduleId }, orderBy: { order: "desc" } });
-  await prisma.lesson.create({ data: { moduleId, order: (last?.order ?? 0) + 1, title } });
+  await prisma.lesson.create({
+    data: { moduleId, order: (last?.order ?? 0) + 1, title, durationMinutes: readDuration(formData.get("durationMinutes")) },
+  });
+  revalidate(version.formationId);
+}
+
+// Durée en minutes, bornée à une journée : au-delà, c'est une faute de frappe.
+function readDuration(raw: FormDataEntryValue | null): number | null {
+  const value = Number(String(raw ?? "").trim());
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return Math.min(Math.round(value), 24 * 60);
+}
+
+// Durée d'une leçon, modifiable tant que la version est un brouillon.
+export async function setLessonDuration(lessonId: string, formData: FormData) {
+  const me = await requirePermission("can_edit_formation");
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, include: { module: true } });
+  if (!lesson) throw new Error("Leçon introuvable");
+  const version = await loadDraftVersion(lesson.module.formationVersionId, me);
+  await prisma.lesson.update({
+    where: { id: lessonId },
+    data: { durationMinutes: readDuration(formData.get("durationMinutes")) },
+  });
   revalidate(version.formationId);
 }
 

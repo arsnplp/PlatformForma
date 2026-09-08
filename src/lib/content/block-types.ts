@@ -13,6 +13,8 @@ export type BlockChoice = {
   keywords: string[];
   /// Les blocs médias ouvrent un sélecteur au lieu d'insérer du Markdown.
   media?: "file" | "embed";
+  /// Le bloc visio ouvre son propre formulaire : c'est une séance, pas du texte.
+  visio?: boolean;
 };
 
 export const BLOCK_CHOICES: BlockChoice[] = [
@@ -31,6 +33,7 @@ export const BLOCK_CHOICES: BlockChoice[] = [
   { key: "divider", label: "Séparateur", hint: "Trait horizontal", template: "---", keywords: ["separateur", "trait", "hr", "ligne"] },
   { key: "file", label: "Image, PDF ou vidéo", hint: "Fichier à envoyer", template: "", keywords: ["image", "photo", "pdf", "video", "fichier", "document"], media: "file" },
   { key: "embed", label: "Vidéo YouTube ou Vimeo", hint: "Lien externe", template: "", keywords: ["youtube", "vimeo", "video", "lien", "integration", "embed"], media: "embed" },
+  { key: "visio", label: "Séance en classe virtuelle", hint: "Rendez-vous émargé", template: "", keywords: ["visio", "meet", "zoom", "seance", "classe", "virtuelle", "emargement", "direct"], visio: true },
 ];
 
 export function findChoice(key: string): BlockChoice | undefined {

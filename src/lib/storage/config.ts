@@ -58,9 +58,15 @@ export function formatBytes(bytes: number): string {
 }
 
 // Nom de fichier sûr : pas de chemin, pas d'accent, longueur bornée.
+// On tronque la FIN du nom, pas le début — couper par la gauche transformait
+// « Émargement… » en « argement… » — tout en gardant l'extension.
 export function safeFileName(name: string): string {
-  const base = name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
-  return base.slice(-80).replace(/^-+/, "") || "fichier";
+  const clean = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
+  const dot = clean.lastIndexOf(".");
+  const hasExtension = dot > 0 && clean.length - dot <= 6;
+  const base = hasExtension ? clean.slice(0, dot) : clean;
+  const extension = hasExtension ? clean.slice(dot) : "";
+  return (base.slice(0, 80).replace(/^-+/, "").replace(/-+$/, "") + extension) || "fichier";
 }
 
 // Pièces de la GED : bureautique et PDF, jamais d'archive ni d'exécutable —

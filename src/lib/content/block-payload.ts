@@ -4,6 +4,10 @@
 export type TextPayload = { markdown: string };
 export type FilePayload = { path: string; name: string; mimeType: string; sizeBytes: number; alt?: string; caption?: string };
 export type EmbedPayload = { url: string; provider: "youtube" | "vimeo"; embedUrl: string; caption?: string };
+/// Séance de visio : le bloc porte le MODÈLE (quoi, combien de temps).
+/// La date et le lien sont propres à chaque session (modèle Seance), car le
+/// contenu est versionné et partagé par plusieurs sessions.
+export type VisioPayload = { title: string; durationMinutes: number; note?: string };
 
 const str = (o: Record<string, unknown>, k: string): string | undefined =>
   typeof o[k] === "string" ? (o[k] as string) : undefined;
@@ -32,6 +36,23 @@ export function readEmbed(payload: unknown): EmbedPayload | null {
   const url = str(o, "url"), embedUrl = str(o, "embedUrl"), provider = str(o, "provider");
   if (!url || !embedUrl || (provider !== "youtube" && provider !== "vimeo")) return null;
   return { url, provider, embedUrl, caption: str(o, "caption") };
+}
+
+export function readVisio(payload: unknown): VisioPayload | null {
+  const o = asObject(payload);
+  if (!o) return null;
+  const title = str(o, "title");
+  const durationMinutes = typeof o.durationMinutes === "number" ? o.durationMinutes : 0;
+  if (!title || durationMinutes <= 0) return null;
+  return { title, durationMinutes, note: str(o, "note") };
+}
+
+// Lien de classe virtuelle collé par le formateur : on n'accepte que du https,
+// et on n'intègre jamais le service dans une iframe — on ouvre un onglet.
+export function parseJoinUrl(raw: string): string | null {
+  let url: URL;
+  try { url = new URL(raw.trim()); } catch { return null; }
+  return url.protocol === "https:" ? url.toString() : null;
 }
 
 // Seuls YouTube et Vimeo sont acceptés : on ne charge jamais une iframe arbitraire.

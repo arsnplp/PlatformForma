@@ -72,6 +72,52 @@ export async function addBlock(lessonId: string, afterOrder: number | null, mark
   return { id: created.id };
 }
 
+const visioSchema = z.object({
+  title: z.string().trim().min(1, "Intitulé requis").max(160),
+  durationMinutes: z.number().int().min(5, "5 minutes minimum").max(600, "10 heures maximum"),
+  note: z.string().trim().max(500).optional(),
+});
+
+// Bloc « séance en classe virtuelle » : il porte le modèle de la séance.
+// Sa date et son lien se renseignent session par session (voir Seance), parce
+// qu'une même version de formation sert plusieurs sessions.
+export async function addVisioBlock(
+  lessonId: string,
+  afterOrder: number | null,
+  input: { title: string; durationMinutes: number; note?: string },
+) {
+  const me = await requirePermission("can_edit_formation");
+  const ctx = await loadDraftLesson(lessonId, me);
+  const parsed = visioSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const at = afterOrder === null
+    ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
+    : afterOrder + 1;
+
+  const created = await prisma.$transaction(async (tx) => {
+    await shiftFrom(tx, lessonId, at);
+    return tx.contentBlock.create({ data: { lessonId, order: at, type: "visio", payload: parsed.data } });
+  });
+  revalidate(ctx);
+  return { id: created.id };
+}
+
+export async function updateVisioBlock(
+  blockId: string,
+  input: { title: string; durationMinutes: number; note?: string },
+) {
+  const me = await requirePermission("can_edit_formation");
+  const { block, ctx } = await loadDraftBlock(blockId, me);
+  if (block.type !== "visio") return { error: "Ce bloc n'est pas une séance." };
+  const parsed = visioSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  await prisma.contentBlock.update({ where: { id: block.id }, data: { payload: parsed.data } });
+  revalidate(ctx);
+  return { ok: true };
+}
+
 const updateSchema = z.object({ markdown: z.string().max(50_000, "Bloc trop long") });
 
 export async function updateBlock(blockId: string, markdown: string) {
@@ -101,6 +147,9 @@ export async function duplicateBlock(blockId: string) {
 export async function removeBlock(blockId: string) {
   const me = await requirePermission("can_edit_formation");
   const { block, ctx } = await loadDraftBlock(blockId, me);
+  // Une séance déjà planifiée sur une session a pu être émargée : c'est du vécu.
+  const planned = await prisma.seance.count({ where: { contentBlockId: blockId } });
+  if (planned > 0) throw new Error("Cette séance est planifiée sur une session : elle ne peut plus être retirée");
   await prisma.$transaction(async (tx) => {
     await tx.contentBlock.delete({ where: { id: block.id } });
     await resequence(tx, block.lessonId);

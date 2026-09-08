@@ -9,15 +9,14 @@ import { canSupervise } from "@/lib/auth/ownership";
 import { uploadFile } from "@/lib/storage/client";
 import { DOCUMENT_BUCKET } from "@/lib/storage/config";
 import { buildAttendanceSheet, buildAttendanceCertificate, type CertificateLine } from "@/lib/attendance/sheet";
+import { readVisio } from "@/lib/content/block-payload";
 import { createMultiSignatureRequest, createSignatureRequest, getSignatureRequest, downloadSignedPdf, remindSigners, hasSigned, isCompleted } from "@/lib/signature/signwell";
-import { resolveSigner, isSignatureTest } from "@/lib/signature/config";
+import { resolveSigner } from "@/lib/signature/config";
 
 export type AttendanceState = { ok: boolean; message: string };
 
 const openSchema = z.object({
-  sessionId: z.string().uuid(),
-  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide"),
-  slot: z.enum(["am", "pm"]),
+  seanceId: z.string().uuid(),
   presentUserIds: z.array(z.string().uuid()),
 });
 
@@ -46,40 +45,54 @@ async function loadManagedSession(sessionId: string, me: CurrentUser) {
   return { session, staff };
 }
 
-// Ouvre une demi-journée : on fige qui est présent, on génère la feuille et on
-// lance la signature. Un absent n'est jamais signataire — c'est ce qui évite
-// qu'une feuille reste bloquée indéfiniment.
-export async function openHalfDay(input: z.input<typeof openSchema>): Promise<AttendanceState> {
+// Ouvre l'émargement d'une SÉANCE : on fige qui est présent, on génère la
+// feuille et on lance la signature. Ce sont les séances de visio qui définissent
+// les feuilles — douze visios, douze émargements. Un absent n'est jamais
+// signataire, ce qui évite qu'une feuille reste bloquée.
+export async function openSeance(input: z.input<typeof openSchema>): Promise<AttendanceState> {
   const me = await requirePermission("can_manage_sessions");
   const parsed = openSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
-  const { sessionId, slot, presentUserIds } = parsed.data;
-  const day = new Date(`${parsed.data.day}T00:00:00.000Z`);
+  const { seanceId, presentUserIds } = parsed.data;
 
-  const { session, staff } = await loadManagedSession(sessionId, me);
+  const seance = await prisma.seance.findUnique({
+    where: { id: seanceId },
+    select: { id: true, sessionId: true, startsAt: true, durationMinutes: true, contentBlock: { select: { payload: true } } },
+  });
+  if (!seance) return { ok: false, message: "Séance introuvable." };
+
+  const { session, staff } = await loadManagedSession(seance.sessionId, me);
   if (session.status === "cancelled") return { ok: false, message: "Session annulée." };
   if (!staff) return { ok: false, message: "La session n'a pas de formateur." };
 
-  const already = await prisma.attendance.findFirst({ where: { sessionId, day, slot } });
-  if (already) return { ok: false, message: "Cette demi-journée est déjà ouverte." };
+  const already = await prisma.attendance.findFirst({ where: { seanceId } });
+  if (already) return { ok: false, message: "L'émargement de cette séance est déjà ouvert." };
 
   const enrolled = session.enrollments.map((e) => e.user);
   const present = enrolled.filter((u) => presentUserIds.includes(u.id));
   if (present.length === 0) return { ok: false, message: "Aucun présent : rien à faire signer." };
 
+  const visio = readVisio(seance.contentBlock.payload);
+  const seanceTitle = visio?.title ?? "Séance";
+  // Jour civil de la séance, pour le classement et l'audit.
+  const day = new Date(Date.UTC(seance.startsAt.getUTCFullYear(), seance.startsAt.getUTCMonth(), seance.startsAt.getUTCDate()));
+  const slot = seance.startsAt.getUTCHours() < 12 ? "am" : "pm";
+
   const { pdf, zones } = await buildAttendanceSheet({
     formationName: session.formationVersion.formation.name,
     sessionName: session.name,
     companyName: session.company?.name ?? null,
-    day,
-    slot,
+    seanceTitle,
+    startsAt: seance.startsAt,
+    durationMinutes: seance.durationMinutes,
     trainerName: staff.name,
     durationHours: session.durationHours,
     participants: present.map((u) => ({ userId: u.id, name: u.name, email: u.email })),
   });
 
-  const title = `Émargement — ${parsed.data.day} ${slot === "am" ? "matin" : "après-midi"} — ${session.name}`;
-  const path = `sessions/${sessionId}/emargements/${parsed.data.day}-${slot}/${randomUUID()}-emargement.pdf`;
+  const dayIso = day.toISOString().slice(0, 10);
+  const title = `Émargement — ${seanceTitle} — ${dayIso}`;
+  const path = `sessions/${seance.sessionId}/emargements/${seanceId}/${randomUUID()}-emargement.pdf`;
   if (!(await uploadFile(path, pdf, { bucket: DOCUMENT_BUCKET, contentType: "application/pdf" }))) {
     return { ok: false, message: "Enregistrement de la feuille impossible." };
   }
@@ -87,7 +100,7 @@ export async function openHalfDay(input: z.input<typeof openSchema>): Promise<At
   // La feuille appartient à la session, pas à un élève : elle porte tout le groupe.
   const document = await prisma.document.create({
     data: {
-      sessionId, companyId: null, ownerUserId: null,
+      sessionId: seance.sessionId, companyId: null, ownerUserId: null,
       type: "emargement", phase: 4, title,
       storagePath: path, mimeType: "application/pdf", sizeBytes: pdf.byteLength,
       uploadedById: me.id, isDemo: session.isDemo,
@@ -96,7 +109,7 @@ export async function openHalfDay(input: z.input<typeof openSchema>): Promise<At
 
   await prisma.attendance.createMany({
     data: enrolled.map((u) => ({
-      sessionId, userId: u.id, day, slot,
+      sessionId: seance.sessionId, seanceId, userId: u.id, day, slot: slot as "am" | "pm",
       status: presentUserIds.includes(u.id) ? ("present" as const) : ("absent" as const),
       documentId: presentUserIds.includes(u.id) ? document.id : null,
     })),
@@ -104,8 +117,8 @@ export async function openHalfDay(input: z.input<typeof openSchema>): Promise<At
 
   // Session de démonstration : aucun appel au prestataire, aucun quota consommé.
   if (session.isDemo) {
-    revalidateAttendance(sessionId);
-    return { ok: true, message: `Demi-journée ouverte pour ${present.length} présent(s) — session de démonstration, signatures simulées.` };
+    revalidateAttendance(seance.sessionId);
+    return { ok: true, message: `Émargement ouvert pour ${present.length} présent(s) — session de démonstration, signatures simulées.` };
   }
 
   // La clé de sous-adressage rend les signataires distincts en mode test, où
@@ -116,13 +129,11 @@ export async function openHalfDay(input: z.input<typeof openSchema>): Promise<At
   ];
   const result = await createMultiSignatureRequest({
     title, fileName: "emargement.pdf", file: pdf, zones,
-    message: "Merci de signer votre présence pour cette demi-journée.",
+    message: "Merci de signer votre présence pour cette séance.",
     signers: signers.map((s) => ({ key: s.key, name: s.name, email: s.email })),
   });
   if (!result.ok) {
-    // La feuille reste au dossier, la signature sera relancée : on ne perd pas
-    // la trace de la demi-journée pour un échec réseau.
-    revalidateAttendance(sessionId);
+    revalidateAttendance(seance.sessionId);
     return { ok: false, message: result.error };
   }
 
@@ -131,20 +142,15 @@ export async function openHalfDay(input: z.input<typeof openSchema>): Promise<At
     data: { signatureStatus: "pending", signatureProviderId: result.document.id },
   });
 
-  revalidateAttendance(sessionId);
-  return {
-    ok: true,
-    message: isSignatureTest()
-      ? `Demi-journée ouverte : ${present.length} présent(s) + le formateur à signer, en mode test.`
-      : `Demi-journée ouverte : ${present.length} présent(s) + le formateur à signer.`,
-  };
+  revalidateAttendance(seance.sessionId);
+  return { ok: true, message: `Émargement ouvert : ${present.length} présent(s) + le formateur à signer.` };
 }
 
-// Envoi (ou renvoi) des demandes de signature d'une demi-journée déjà ouverte.
+// Envoi (ou renvoi) des demandes de signature d'une séance déjà ouverte.
 // Sert quand l'appel au prestataire a échoué : la feuille et les présences sont
 // déjà au dossier, il ne reste qu'à relancer la demande. La feuille est
 // régénérée à l'identique, donc les zones de signature retombent au même endroit.
-export async function requestHalfDaySignature(documentId: string): Promise<AttendanceState> {
+export async function requestSeanceSignature(documentId: string): Promise<AttendanceState> {
   const me = await requirePermission("can_manage_sessions");
   const document = await prisma.document.findUnique({
     where: { id: documentId },
@@ -159,18 +165,20 @@ export async function requestHalfDaySignature(documentId: string): Promise<Atten
 
   const rows = await prisma.attendance.findMany({
     where: { documentId, status: { in: ["present", "signed"] } },
-    include: { user: { select: { id: true, name: true, email: true } } },
+    include: { user: { select: { id: true, name: true, email: true } }, seance: { include: { contentBlock: true } } },
     orderBy: { user: { name: "asc" } },
   });
-  if (rows.length === 0) return { ok: false, message: "Aucun présent sur cette demi-journée." };
-  const first = rows[0];
+  if (rows.length === 0) return { ok: false, message: "Aucun présent sur cette séance." };
+  const seance = rows[0].seance;
+  if (!seance) return { ok: false, message: "Séance introuvable." };
 
   const { pdf, zones } = await buildAttendanceSheet({
     formationName: session.formationVersion.formation.name,
     sessionName: session.name,
     companyName: session.company?.name ?? null,
-    day: first.day,
-    slot: first.slot,
+    seanceTitle: readVisio(seance.contentBlock.payload)?.title ?? "Séance",
+    startsAt: seance.startsAt,
+    durationMinutes: seance.durationMinutes,
     trainerName: staff.name,
     durationHours: session.durationHours,
     participants: rows.map((r) => ({ userId: r.user.id, name: r.user.name, email: r.user.email })),
@@ -183,7 +191,7 @@ export async function requestHalfDaySignature(documentId: string): Promise<Atten
   ];
   const result = await createMultiSignatureRequest({
     title: document.title, fileName: "emargement.pdf", file: pdf, zones,
-    message: "Merci de signer votre présence pour cette demi-journée.",
+    message: "Merci de signer votre présence pour cette séance.",
     signers: signers.map((s) => ({ key: s.key, name: s.name, email: s.email })),
   });
   if (!result.ok) return { ok: false, message: result.error };
@@ -207,12 +215,12 @@ export async function getAttendanceSigningUrl(attendanceId: string): Promise<{ u
       document: { select: { signatureProviderId: true } },
     },
   });
-  if (!attendance) return { error: "Demi-journée introuvable." };
+  if (!attendance) return { error: "Séance introuvable." };
 
   const isStaff = canSupervise(me) || attendance.session.ownerId === me.id || attendance.session.trainerId === me.id;
   if (attendance.userId !== me.id && !isStaff) return { error: "Demi-journée introuvable." };
   if (attendance.signedAt) return { error: "Déjà signée." };
-  if (attendance.status !== "present") return { error: "Cette demi-journée n'est pas à signer." };
+  if (attendance.status !== "present") return { error: "Cette séance n'est pas à signer." };
   if (!attendance.document?.signatureProviderId) return { error: "Aucune demande de signature." };
 
   const remote = await getSignatureRequest(attendance.document.signatureProviderId);
@@ -240,7 +248,7 @@ export async function getTrainerSigningUrl(documentId: string): Promise<{ url: s
 
 // Reprise des signatures auprès de SignWell : qui a signé, et si la feuille est
 // complète, récupération du PDF signé avec sa page de preuve.
-export async function refreshHalfDay(documentId: string): Promise<AttendanceState> {
+export async function refreshSeance(documentId: string): Promise<AttendanceState> {
   const me = await requireUser();
   const document = await prisma.document.findUnique({
     where: { id: documentId },
@@ -296,7 +304,7 @@ export async function signDemoAttendance(attendanceId: string): Promise<Attendan
     where: { id: attendanceId },
     select: { userId: true, sessionId: true, status: true, session: { select: { isDemo: true } } },
   });
-  if (!attendance || attendance.userId !== me.id) return { ok: false, message: "Demi-journée introuvable." };
+  if (!attendance || attendance.userId !== me.id) return { ok: false, message: "Séance introuvable." };
   if (!attendance.session.isDemo) return { ok: false, message: "Cette session exige une signature réelle." };
   if (attendance.status !== "present") return { ok: false, message: "Rien à signer." };
 
@@ -305,7 +313,7 @@ export async function signDemoAttendance(attendanceId: string): Promise<Attendan
   return { ok: true, message: "Présence enregistrée (démonstration)." };
 }
 
-export async function remindHalfDay(documentId: string): Promise<AttendanceState> {
+export async function remindSeance(documentId: string): Promise<AttendanceState> {
   const me = await requirePermission("can_manage_sessions");
   const document = await prisma.document.findUnique({
     where: { id: documentId },
@@ -322,11 +330,11 @@ export async function remindHalfDay(documentId: string): Promise<AttendanceState
     : { ok: false, message: "Relance impossible pour l'instant." };
 }
 
-// Clôture d'une demi-journée que des retardataires laissent en attente.
+// Clôture d'une séance que des retardataires laissent en attente.
 // On ne peut pas retirer un signataire chez SignWell : on acte donc côté
 // dossier qui a signé, et on marque les autres « présent, signature non
 // recueillie ». La feuille garde les signatures déjà recueillies.
-export async function closeHalfDay(documentId: string): Promise<AttendanceState> {
+export async function closeSeance(documentId: string): Promise<AttendanceState> {
   const me = await requirePermission("can_manage_sessions");
   const document = await prisma.document.findUnique({
     where: { id: documentId },
@@ -336,7 +344,7 @@ export async function closeHalfDay(documentId: string): Promise<AttendanceState>
   const isStaff = canSupervise(me) || document.session?.ownerId === me.id || document.session?.trainerId === me.id;
   if (!isStaff) return { ok: false, message: "Feuille introuvable." };
 
-  await refreshHalfDay(documentId);
+  await refreshSeance(documentId);
   const closed = await prisma.attendance.updateMany({
     where: { documentId, status: "present", signedAt: null },
     data: { status: "unsigned" },
@@ -344,7 +352,7 @@ export async function closeHalfDay(documentId: string): Promise<AttendanceState>
 
   if (closed.count === 0) {
     if (document.sessionId) revalidateAttendance(document.sessionId);
-    return { ok: true, message: "Demi-journée close : tout le monde avait signé." };
+    return { ok: true, message: "Séance close : tout le monde avait signé." };
   }
 
   // Des présents n'ont pas signé : le formateur atteste lui-même des présences,
@@ -353,7 +361,7 @@ export async function closeHalfDay(documentId: string): Promise<AttendanceState>
   if (document.sessionId) revalidateAttendance(document.sessionId);
   return {
     ok: true,
-    message: `Demi-journée close : ${closed.count} présent(s) sans signature recueillie. ${certificate}`,
+    message: `Séance close : ${closed.count} présent(s) sans signature recueillie. ${certificate}`,
   };
 }
 
@@ -368,14 +376,16 @@ async function issueAttendanceCertificate(documentId: string, me: CurrentUser): 
 
   const rows = await prisma.attendance.findMany({
     where: { documentId },
-    include: { user: { select: { name: true } } },
+    include: { user: { select: { name: true } }, seance: { include: { contentBlock: true } } },
     orderBy: { user: { name: "asc" } },
   });
+  if (rows.length === 0) return "";
+  const seance = rows[0].seance;
+  if (!seance) return "";
   const absent = await prisma.attendance.findMany({
-    where: { sessionId: sheet.sessionId, day: rows[0]?.day, slot: rows[0]?.slot, status: "absent" },
+    where: { seanceId: seance.id, status: "absent" },
     include: { user: { select: { name: true } } },
   });
-  if (rows.length === 0) return "";
 
   const { session, staff } = await loadManagedSession(sheet.sessionId, me);
   if (!staff) return "";
@@ -389,21 +399,23 @@ async function issueAttendanceCertificate(documentId: string, me: CurrentUser): 
     ...absent.map((r) => ({ name: r.user.name, state: "absent" as const, signedAt: null })),
   ];
 
+  const seanceTitle = readVisio(seance.contentBlock.payload)?.title ?? "Séance";
   const { pdf, zone } = await buildAttendanceCertificate({
     formationName: session.formationVersion.formation.name,
     sessionName: session.name,
     companyName: session.company?.name ?? null,
-    day: rows[0].day,
-    slot: rows[0].slot,
+    seanceTitle,
+    startsAt: seance.startsAt,
+    durationMinutes: seance.durationMinutes,
     trainerName: staff.name,
     durationHours: session.durationHours,
     participants: [],
     lines,
   });
 
-  const dayIso = rows[0].day.toISOString().slice(0, 10);
-  const title = `Attestation de présence — ${dayIso} ${rows[0].slot === "am" ? "matin" : "après-midi"} — ${session.name}`;
-  const path = `sessions/${sheet.sessionId}/emargements/${dayIso}-${rows[0].slot}/${randomUUID()}-attestation.pdf`;
+  const dayIso = seance.startsAt.toISOString().slice(0, 10);
+  const title = `Attestation de présence — ${seanceTitle} — ${dayIso}`;
+  const path = `sessions/${sheet.sessionId}/emargements/${seance.id}/${randomUUID()}-attestation.pdf`;
   if (!(await uploadFile(path, pdf, { bucket: DOCUMENT_BUCKET, contentType: "application/pdf" }))) {
     return "Attestation non enregistrée.";
   }

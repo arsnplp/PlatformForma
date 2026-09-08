@@ -44,11 +44,11 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
           <Link href={`/espace/sessions/${sessionId}/messages`} className="font-medium text-brand hover:underline">
             Messages avec mon formateur →
           </Link>
+          <Link href={`/espace/sessions/${sessionId}/plan`} className="font-medium text-brand hover:underline">
+            Plan de formation →
+          </Link>
           <Link href={`/espace/sessions/${sessionId}/documents`} className="font-medium text-brand hover:underline">
             Mes documents →
-          </Link>
-          <Link href={`/espace/sessions/${sessionId}/emargements`} className="font-medium text-brand hover:underline">
-            Mes émargements →
           </Link>
         </p>
         <p className="mt-3 text-sm text-foreground-tertiary">

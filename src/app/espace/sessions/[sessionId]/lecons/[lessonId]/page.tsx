@@ -5,9 +5,13 @@ import { getSessionAccess, getLessonForSession } from "@/lib/queries/student-spa
 import { BlockView } from "@/components/content/block-view";
 import { StudentExercises } from "@/components/content/student-exercises";
 import { readText } from "@/lib/content/block-payload";
+import { prisma } from "@/lib/prisma";
+import { currentTime } from "@/lib/now";
 
 // Lecture d'une leçon : exactement le rendu de l'éditeur (spec §3.2).
 export default async function StudentLessonPage({ params }: PageProps<"/espace/sessions/[sessionId]/lecons/[lessonId]">) {
+  // Horodatage du rendu, lu une fois : les composants restent purs.
+  const renderedAt = await currentTime();
   const { sessionId, lessonId } = await params;
   const me = await requireUser(`/espace/sessions/${sessionId}/lecons/${lessonId}`);
   const access = await getSessionAccess(sessionId, me);
@@ -18,6 +22,33 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
   const { lesson, previous, next, position, total } = data;
   // Un bloc texte vide n'est pas affiché ; les blocs médias le sont toujours.
   const blocks = lesson.contentBlocks.filter((b) => b.type !== "text" || readText(b.payload).trim().length > 0);
+
+  // Séances de visio de cette leçon, planifiées pour CETTE session, avec
+  // l'émargement de l'élève : le rendez-vous et sa signature au même endroit.
+  const visioBlockIds = blocks.filter((b) => b.type === "visio").map((b) => b.id);
+  const seances = visioBlockIds.length
+    ? await prisma.seance.findMany({
+        where: { sessionId, contentBlockId: { in: visioBlockIds } },
+        include: {
+          attendances: { where: { userId: me.id }, select: { id: true, status: true, documentId: true } },
+          session: { select: { isDemo: true } },
+        },
+      })
+    : [];
+  const seanceByBlock = new Map(
+    seances.map((s) => [
+      s.contentBlockId,
+      {
+        id: s.id,
+        startsAt: s.startsAt,
+        joinUrl: s.joinUrl,
+        durationMinutes: s.durationMinutes,
+        attendance: s.attendances[0]
+          ? { ...s.attendances[0], isDemo: s.session.isDemo }
+          : null,
+      },
+    ]),
+  );
 
   return (
     <div className="space-y-8">
@@ -41,7 +72,14 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
         {blocks.length === 0 ? (
           <p className="text-sm text-foreground-tertiary">Cette leçon n&apos;a pas encore de contenu.</p>
         ) : (
-          blocks.map((b) => <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />)
+          blocks.map((b) => (
+            <BlockView
+              key={b.id}
+              block={{ id: b.id, type: b.type, payload: b.payload }}
+              seance={seanceByBlock.get(b.id) ?? null}
+              now={renderedAt}
+            />
+          ))
         )}
       </article>
 

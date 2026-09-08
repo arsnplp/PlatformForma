@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { getAttendanceSigningUrl, refreshHalfDay, signDemoAttendance } from "@/lib/actions/attendance";
+import { getAttendanceSigningUrl, refreshSeance, signDemoAttendance } from "@/lib/actions/attendance";
 import { useEmbeddedSigning } from "./embedded-signing";
 import { Button } from "@/components/ui/button";
 
@@ -26,7 +26,7 @@ export function SignAttendance({
   // plutôt que de croire l'interface sur parole.
   const { open, loading } = useEmbeddedSigning(() => {
     startTransition(async () => {
-      if (documentId) await refreshHalfDay(documentId);
+      if (documentId) await refreshSeance(documentId);
       router.refresh();
     });
   });

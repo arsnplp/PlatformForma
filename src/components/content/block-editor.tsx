@@ -6,6 +6,7 @@ import { addBlock, updateBlock, duplicateBlock, removeBlock, reorderBlocks } fro
 import type { BlockChoice } from "@/lib/content/block-types";
 import { SlashMenu } from "./slash-menu";
 import { MediaPicker } from "./media-picker";
+import { VisioForm } from "./visio-form";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ export function BlockEditor({
   const [draft, setDraft] = useState("");
   const [menuAfter, setMenuAfter] = useState<number | "end" | null>(null);
   const [mediaAfter, setMediaAfter] = useState<{ position: number | "end"; afterOrder: number | null; mode: "file" | "embed" } | null>(null);
+  const [visioAfter, setVisioAfter] = useState<{ afterOrder: number | null } | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -115,6 +117,12 @@ export function BlockEditor({
   }
 
   function insert(choice: BlockChoice, afterOrder: number | null, position: number | "end") {
+    // Séance de visio : formulaire dédié, ce n'est pas du Markdown.
+    if (choice.visio) {
+      setMenuAfter(null);
+      setVisioAfter({ afterOrder });
+      return;
+    }
     // Bloc média : on ouvre le sélecteur plutôt que d'insérer du Markdown.
     if (choice.media) {
       setMenuAfter(null);
@@ -143,6 +151,17 @@ export function BlockEditor({
   return (
     <div className={cn("space-y-1", pending && "opacity-70")}>
       {error ? <p className="rounded-md bg-status-red-bg px-3 py-2 text-sm text-status-red">{error}</p> : null}
+
+      {visioAfter ? (
+        <div className="flex justify-center py-2">
+          <VisioForm
+            lessonId={lessonId}
+            afterOrder={visioAfter.afterOrder}
+            onDone={() => { setVisioAfter(null); router.refresh(); }}
+            onCancel={() => setVisioAfter(null)}
+          />
+        </div>
+      ) : null}
 
       {mediaAfter ? (
         <div className="flex justify-center py-2">
