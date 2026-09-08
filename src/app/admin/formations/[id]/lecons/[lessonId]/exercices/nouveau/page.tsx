@@ -6,10 +6,11 @@ import { createExercise } from "@/lib/actions/exercises";
 import { PageHeader } from "@/components/admin/page-header";
 import { ExerciseForm } from "@/components/content/exercise-form";
 import { ExerciseList } from "@/components/content/exercise-list";
+import { ExerciseLibrary } from "@/components/content/exercise-library";
 
 export default async function NewExercisePage({ params, searchParams }: PageProps<"/admin/formations/[id]/lecons/[lessonId]/exercices/nouveau">) {
   const { id, lessonId } = await params;
-  const { cree } = await searchParams;
+  const { cree, q } = await searchParams;
   const created = typeof cree === "string" ? cree : null;
   const me = await requireUser(`/admin/formations/${id}/lecons/${lessonId}`);
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
@@ -50,6 +51,8 @@ export default async function NewExercisePage({ params, searchParams }: PageProp
       />
 
       <ExerciseList formationId={id} target={{ lessonId }} editable compact />
+
+      <ExerciseLibrary target={{ lessonId }} search={typeof q === "string" ? q : undefined} />
     </div>
   );
 }

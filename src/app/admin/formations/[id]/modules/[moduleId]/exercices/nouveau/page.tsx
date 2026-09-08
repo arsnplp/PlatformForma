@@ -6,11 +6,12 @@ import { createExercise } from "@/lib/actions/exercises";
 import { PageHeader } from "@/components/admin/page-header";
 import { ExerciseForm } from "@/components/content/exercise-form";
 import { ExerciseList } from "@/components/content/exercise-list";
+import { ExerciseLibrary } from "@/components/content/exercise-library";
 
 // Exercice de fin de module : même formulaire que pour une leçon, autre attache.
 export default async function NewModuleExercisePage({ params, searchParams }: PageProps<"/admin/formations/[id]/modules/[moduleId]/exercices/nouveau">) {
   const { id, moduleId } = await params;
-  const { cree } = await searchParams;
+  const { cree, q } = await searchParams;
   const created = typeof cree === "string" ? cree : null;
   const me = await requireUser(`/admin/formations/${id}`);
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
@@ -50,6 +51,8 @@ export default async function NewModuleExercisePage({ params, searchParams }: Pa
       />
 
       <ExerciseList formationId={id} target={{ moduleId }} editable compact />
+
+      <ExerciseLibrary target={{ moduleId }} search={typeof q === "string" ? q : undefined} />
     </div>
   );
 }

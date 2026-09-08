@@ -181,3 +181,41 @@ export async function moveExercise(exerciseId: string, direction: "up" | "down")
   ]);
   revalidate(ctx);
 }
+
+// Reprendre un exercice déjà écrit ailleurs plutôt que de le retaper : on en
+// COPIE le contenu dans la cible. Copie et non référence, parce qu'un exercice
+// appartient au contenu versionné de SA formation — un lien créerait un
+// couplage entre deux versions qui doivent rester indépendantes.
+export async function copyExercise(target: ExerciseTarget, sourceId: string) {
+  const me = await requirePermission("can_edit_formation");
+  const ctx = await loadDraftTarget(target, me);
+
+  const source = await prisma.exercise.findUnique({
+    where: { id: sourceId },
+    include: {
+      lesson: { include: { module: { include: { formationVersion: { include: { formation: true } } } } } },
+      module: { include: { formationVersion: { include: { formation: true } } } },
+    },
+  });
+  const origin = source?.lesson?.module.formationVersion.formation ?? source?.module?.formationVersion.formation;
+  if (!source || !origin) throw new Error("Exercice introuvable");
+  // On ne reprend que ce qu'on a le droit de lire.
+  assertOwnerOrSupervisor(me, origin.ownerId);
+
+  const last = await prisma.exercise.findFirst({ where: siblingWhere(target), orderBy: { order: "desc" } });
+  await prisma.exercise.create({
+    data: {
+      lessonId: target.lessonId ?? null,
+      moduleId: target.moduleId ?? null,
+      order: (last?.order ?? 0) + 1,
+      type: source.type,
+      title: source.title,
+      statement: source.statement,
+      correctionMode: source.correctionMode,
+      maxScore: source.maxScore,
+      config: source.config as Prisma.InputJsonValue,
+    },
+  });
+  revalidate(ctx);
+  redirect(`${ctx.again}?cree=${encodeURIComponent(source.title)}`);
+}

@@ -246,7 +246,8 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                     {m.lessons.length > 0 ? (
                       <ul className="mt-2 space-y-1 pl-6 text-sm">
                         {m.lessons.map((l) => (
-                          <li key={l.id} className="flex items-center justify-between gap-3">
+                          <li key={l.id}>
+                            <div className="flex items-center justify-between gap-3">
                             <span>
                               <span className="mr-2 text-foreground-tertiary tabular-nums">{m.order}.{l.order}</span>
                               <Link href={`/admin/formations/${formation.id}/lecons/${l.id}`} className="hover:underline">
@@ -254,7 +255,6 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                               </Link>
                               <span className="ml-2 text-xs text-foreground-tertiary">
                                 {l._count.contentBlocks} bloc(s) · {formatDuration(l.durationMinutes)}
-                                {l._count.exercises > 0 ? ` · ${l._count.exercises} exo(s)` : ""}
                               </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-1">
@@ -285,6 +285,18 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                                 </form>
                               ) : null}
                             </span>
+                            </div>
+                            {/* Aperçu replié : on voit ce que la leçon évalue sans la quitter. */}
+                            {l._count.exercises > 0 ? (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-xs text-foreground-secondary hover:text-foreground">
+                                  {l._count.exercises} exercice(s)
+                                </summary>
+                                <div className="mt-2 pb-2">
+                                  <ExerciseList formationId={formation.id} target={{ lessonId: l.id }} editable={canEditContent} compact />
+                                </div>
+                              </details>
+                            ) : null}
                           </li>
                         ))}
                       </ul>
