@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { requestUpload, attachUploadedFile, addEmbedBlock } from "@/lib/actions/media";
 import { CONTENT_BUCKET, MAX_FILE_BYTES, ALLOWED_TYPES, formatBytes } from "@/lib/storage/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 import type { BlockTarget } from "@/lib/content/block-target";
 
 const ACCEPT = [...ALLOWED_TYPES.image, ...ALLOWED_TYPES.pdf, ...ALLOWED_TYPES.video, ...ALLOWED_TYPES.document].join(",");
@@ -25,7 +26,6 @@ export function MediaPicker({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,13 +88,12 @@ export function MediaPicker({
               Image, PDF, Word, Excel, PowerPoint ou vidéo · {formatBytes(MAX_FILE_BYTES)} maximum. Pour une vidéo lourde, préférez un lien YouTube ou Vimeo.
             </p>
           </div>
-          <input
-            ref={inputRef}
-            type="file"
+          <FileDropzone
+            onFile={upload}
             accept={ACCEPT}
-            disabled={busy}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }}
-            className="block w-full text-xs file:mr-2 file:rounded-md file:border file:bg-surface file:px-2 file:py-1 file:text-xs"
+            label="Glisse un fichier ici, ou clique pour le choisir"
+            busy={busy}
+            className="py-4"
           />
         </>
       ) : (

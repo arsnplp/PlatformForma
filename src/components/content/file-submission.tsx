@@ -5,6 +5,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { requestSubmissionUpload, submitFiles } from "@/lib/actions/submissions";
 import { MAX_FILE_BYTES, SUBMISSION_TYPES, formatBytes } from "@/lib/storage/config";
 import { Button } from "@/components/ui/button";
+import { FileDropzone } from "@/components/ui/file-dropzone";
 
 type Ready = { path: string; name: string; mimeType: string; sizeBytes: number };
 
@@ -73,13 +74,13 @@ export function FileSubmission({
       ) : null}
 
       {files.length < maxFiles && !confirming ? (
-        <input
-          type="file"
+        <FileDropzone
+          onFile={upload}
           accept={SUBMISSION_TYPES.join(",")}
-          disabled={busy || pending}
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }}
-          className="block w-full max-w-sm text-xs file:mr-2 file:rounded-md file:border file:bg-surface file:px-2 file:py-1 file:text-xs"
-          aria-label="Choisir un fichier"
+          label="Glisse ton fichier ici, ou clique pour le choisir"
+          hint={`PDF, images, bureautique et archives · ${formatBytes(MAX_FILE_BYTES)} maximum`}
+          busy={busy}
+          disabled={pending}
         />
       ) : null}
 

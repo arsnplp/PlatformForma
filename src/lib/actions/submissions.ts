@@ -22,8 +22,16 @@ export async function submitAnswer(exerciseId: string, sessionId: string, answer
   if (!enrollment) return { error: "Vous n'êtes pas inscrit à cette session." };
   if (enrollment.session.status === "cancelled") return { error: "Session annulée." };
 
+  // Un exercice pend à une leçon OU à un module (évaluation de fin de module) :
+  // les deux appartiennent à la version, les deux doivent être rendus.
   const exercise = await prisma.exercise.findFirst({
-    where: { id: exerciseId, lesson: { module: { formationVersionId: enrollment.session.formationVersionId } } },
+    where: {
+      id: exerciseId,
+      OR: [
+        { lesson: { module: { formationVersionId: enrollment.session.formationVersionId } } },
+        { module: { formationVersionId: enrollment.session.formationVersionId } },
+      ],
+    },
   });
   if (!exercise) return { error: "Exercice introuvable." };
 
@@ -72,7 +80,14 @@ export async function requestSubmissionUpload(
   if (!enrollment) return { ok: false, error: "Vous n'êtes pas inscrit à cette session." };
 
   const exercise = await prisma.exercise.findFirst({
-    where: { id: exerciseId, type: "file_upload", lesson: { module: { formationVersion: { sessions: { some: { id: sessionId } } } } } },
+    where: {
+      id: exerciseId,
+      type: "file_upload",
+      OR: [
+        { lesson: { module: { formationVersion: { sessions: { some: { id: sessionId } } } } } },
+        { module: { formationVersion: { sessions: { some: { id: sessionId } } } } },
+      ],
+    },
   });
   if (!exercise) return { ok: false, error: "Exercice introuvable." };
 
