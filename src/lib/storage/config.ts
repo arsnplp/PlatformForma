@@ -14,11 +14,46 @@ export const DOCUMENT_BUCKET = "documents";
 export const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 Mo
 
 // Types acceptés. Le SVG est volontairement exclu : il peut porter du script.
+// Le bureautique (`document`) est un support à emporter : le navigateur ne
+// sait pas l'afficher, on le propose au téléchargement. Ni archive ni
+// exécutable : un support de cours doit s'ouvrir tel quel.
 export const ALLOWED_TYPES = {
   image: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"],
   pdf: ["application/pdf"],
   video: ["video/mp4", "video/webm", "video/quicktime"],
+  document: [
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "text/plain",
+    "text/csv",
+  ],
 } as const;
+
+// Étiquette courte d'un fichier bureautique, pour l'afficher sans jargon MIME.
+const DOCUMENT_LABELS: Record<string, string> = {
+  "application/msword": "Word",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+  "application/vnd.ms-excel": "Excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel",
+  "application/vnd.ms-powerpoint": "PowerPoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PowerPoint",
+  "application/vnd.oasis.opendocument.text": "OpenDocument texte",
+  "application/vnd.oasis.opendocument.spreadsheet": "OpenDocument tableur",
+  "application/vnd.oasis.opendocument.presentation": "OpenDocument présentation",
+  "text/plain": "Texte",
+  "text/csv": "CSV",
+};
+
+export function documentLabel(mimeType: string): string {
+  return DOCUMENT_LABELS[mimeType] ?? "Document";
+}
 
 export type FileKind = keyof typeof ALLOWED_TYPES;
 
@@ -27,16 +62,7 @@ export type FileKind = keyof typeof ALLOWED_TYPES;
 export const SUBMISSION_TYPES: readonly string[] = [
   ...ALLOWED_TYPES.image,
   ...ALLOWED_TYPES.pdf,
-  "text/plain",
-  "text/csv",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.oasis.opendocument.text",
-  "application/vnd.oasis.opendocument.spreadsheet",
+  ...ALLOWED_TYPES.document,
   "application/zip",
 ];
 
@@ -77,17 +103,7 @@ export const DOCUMENT_TYPES: readonly string[] = [
   // Photos prises depuis un iPhone : le format par défaut d'iOS.
   "image/heic",
   "image/heif",
-  "text/plain",
-  "text/csv",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.oasis.opendocument.text",
-  "application/vnd.oasis.opendocument.spreadsheet",
-  "application/vnd.oasis.opendocument.presentation",
+  ...ALLOWED_TYPES.document,
 ];
 
 export function isAllowedDocumentType(mimeType: string): boolean {

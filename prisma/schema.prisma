@@ -61,6 +61,9 @@ enum ContentBlockType {
   /// Le bloc définit la séance (titre, durée) ; sa date et son lien sont
   /// propres à chaque session (modèle Seance).
   visio
+  /// Support bureautique à emporter (Word, Excel, PowerPoint, OpenDocument,
+  /// texte, CSV) : le navigateur ne sait pas l'afficher, on le télécharge.
+  file
 }
 
 enum ExerciseType {

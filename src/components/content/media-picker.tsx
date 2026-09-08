@@ -7,7 +7,7 @@ import { CONTENT_BUCKET, MAX_FILE_BYTES, ALLOWED_TYPES, formatBytes } from "@/li
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-const ACCEPT = [...ALLOWED_TYPES.image, ...ALLOWED_TYPES.pdf, ...ALLOWED_TYPES.video].join(",");
+const ACCEPT = [...ALLOWED_TYPES.image, ...ALLOWED_TYPES.pdf, ...ALLOWED_TYPES.video, ...ALLOWED_TYPES.document].join(",");
 
 // Envoi direct navigateur → Supabase : le fichier ne passe pas par le serveur
 // applicatif. L'autorisation est délivrée à l'unité, après vérification des droits.
@@ -84,7 +84,7 @@ export function MediaPicker({
           <div>
             <p className="text-sm font-medium">Ajouter un fichier</p>
             <p className="mt-0.5 text-xs text-foreground-tertiary">
-              Image, PDF ou vidéo · {formatBytes(MAX_FILE_BYTES)} maximum. Pour une vidéo lourde, préférez un lien YouTube ou Vimeo.
+              Image, PDF, Word, Excel, PowerPoint ou vidéo · {formatBytes(MAX_FILE_BYTES)} maximum. Pour une vidéo lourde, préférez un lien YouTube ou Vimeo.
             </p>
           </div>
           <input

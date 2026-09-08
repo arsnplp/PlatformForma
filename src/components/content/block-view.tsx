@@ -3,7 +3,7 @@ import { Prose } from "./prose";
 import { readText, readFile, readEmbed, readVisio } from "@/lib/content/block-payload";
 import { formatDuration } from "@/lib/content/duration";
 import { SeanceCard, type SeanceView } from "./seance-card";
-import { formatBytes } from "@/lib/storage/config";
+import { formatBytes, documentLabel } from "@/lib/storage/config";
 import type { ContentBlockType } from "@/generated/prisma/enums";
 
 export type ViewBlock = { id: string; type: ContentBlockType; payload: unknown };
@@ -57,19 +57,31 @@ export function BlockView({ block, seance, now = 0 }: { block: ViewBlock; seance
     );
   }
 
-  if (block.type === "pdf") {
+  // PDF et bureautique partagent la même carte. La seule différence : un PDF
+  // s'ouvre dans le navigateur, un .docx ne s'affiche pas — on le télécharge.
+  if (block.type === "pdf" || block.type === "file") {
     const file = readFile(block.payload);
     if (!file) return <MissingFile />;
+    const isPdf = block.type === "pdf";
     return (
       <figure className="my-4">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3">
           <span className="min-w-0">
             <span className="block truncate font-medium">{file.name}</span>
-            <span className="text-xs text-foreground-tertiary">PDF · {formatBytes(file.sizeBytes)}</span>
+            <span className="text-xs text-foreground-tertiary">
+              {isPdf ? "PDF" : documentLabel(file.mimeType)} · {formatBytes(file.sizeBytes)}
+            </span>
           </span>
           <span className="flex shrink-0 gap-3 text-sm">
-            <Link href={src} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Ouvrir</Link>
-            <Link href={`${src}?download=1`} className="text-foreground-secondary underline underline-offset-2 hover:text-foreground">Télécharger</Link>
+            {isPdf ? (
+              <Link href={src} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Ouvrir</Link>
+            ) : null}
+            <Link
+              href={`${src}?download=1`}
+              className={isPdf ? "text-foreground-secondary underline underline-offset-2 hover:text-foreground" : "underline underline-offset-2"}
+            >
+              Télécharger
+            </Link>
           </span>
         </div>
         {file.caption ? <figcaption className="mt-2 text-sm text-foreground-tertiary">{file.caption}</figcaption> : null}

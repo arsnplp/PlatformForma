@@ -52,7 +52,8 @@ export async function attachUploadedFile(
   if (!kind) throw new Error("Type de fichier non accepté.");
   if (!file.path.startsWith(`versions/`) || !file.path.includes(`/${lessonId}/`)) throw new Error("Chemin de fichier invalide.");
 
-  const type: ContentBlockType = kind === "image" ? "image" : kind === "pdf" ? "pdf" : "video";
+  const type: ContentBlockType =
+    kind === "image" ? "image" : kind === "pdf" ? "pdf" : kind === "video" ? "video" : "file";
   const at = afterOrder === null
     ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
     : afterOrder + 1;

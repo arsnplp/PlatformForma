@@ -31,7 +31,7 @@ export const BLOCK_CHOICES: BlockChoice[] = [
   { key: "warning", label: "Encadré Attention", hint: "Point de vigilance", template: "> [!WARNING]\n> |", keywords: ["attention", "warning", "vigilance"] },
   { key: "table", label: "Tableau", hint: "Trois colonnes", template: "| Colonne | Colonne | Colonne |\n| --- | --- | --- |\n| | | |", keywords: ["tableau", "table"] },
   { key: "divider", label: "Séparateur", hint: "Trait horizontal", template: "---", keywords: ["separateur", "trait", "hr", "ligne"] },
-  { key: "file", label: "Image, PDF ou vidéo", hint: "Fichier à envoyer", template: "", keywords: ["image", "photo", "pdf", "video", "fichier", "document"], media: "file" },
+  { key: "file", label: "Fichier", hint: "Image, PDF, Word, Excel, vidéo…", template: "", keywords: ["image", "photo", "pdf", "video", "fichier", "document", "word", "docx", "excel", "xlsx", "powerpoint", "pptx", "support"], media: "file" },
   { key: "embed", label: "Vidéo YouTube ou Vimeo", hint: "Lien externe", template: "", keywords: ["youtube", "vimeo", "video", "lien", "integration", "embed"], media: "embed" },
   { key: "visio", label: "Séance en classe virtuelle", hint: "Rendez-vous émargé", template: "", keywords: ["visio", "meet", "zoom", "seance", "classe", "virtuelle", "emargement", "direct"], visio: true },
 ];
