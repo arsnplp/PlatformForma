@@ -46,10 +46,6 @@ export async function buildPlanPdf(plan: Plan): Promise<Uint8Array> {
       (session.durationHours ? ` · durée conventionnelle : ${session.durationHours} heures` : ""),
     10,
   );
-  if (session.isDemo) {
-    y -= 4;
-    write("DONNÉES DE DÉMONSTRATION — ce plan n'a aucune valeur probante.", 10, bold, rgb(0.72, 0.35, 0.05));
-  }
   y -= 12;
 
   for (const mod of plan.modules) {

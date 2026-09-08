@@ -6,7 +6,6 @@ import { downloadFile } from "@/lib/storage/client";
 import { DOCUMENT_BUCKET, safeFileName } from "@/lib/storage/config";
 import { phaseLabel } from "@/lib/labels";
 import { buildManifest, type ManifestEntry } from "./manifest";
-import { watermarkDemo } from "./watermark";
 import type { CurrentUser } from "@/lib/auth/session";
 import { canSupervise } from "@/lib/auth/ownership";
 
@@ -181,9 +180,10 @@ export function streamDossier(params: {
           const file = await downloadFile(piece.storagePath, DOCUMENT_BUCKET);
           if (!file) continue;
           const path = entryPath(piece, index++);
-          // Une pièce de démonstration est estampillée page à page.
-          const content = piece.isDemo ? await watermarkDemo(file) : file;
-          archive.append(Buffer.from(content), { name: path });
+          // Les pièces partent telles quelles. Le filigrane « données de
+          // démonstration » a été retiré à la demande : voir DEPLOIEMENT.md,
+          // watermarkDemo() reste disponible dans ./watermark pour le rétablir.
+          archive.append(Buffer.from(file), { name: path });
           entries.push({
             path, title: piece.title, type: piece.type, phase: piece.phase,
             createdAt: piece.createdAt, signatureStatus: piece.signatureStatus,

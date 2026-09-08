@@ -160,8 +160,13 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       heures fabriquées, ni une session réelle d'une session de démonstration.
       Un seul fichier à modifier, `src/lib/export/time-sheet-pdf.ts` :
       `report.simulated` et `report.session.isDemo` y sont déjà calculés.
-      À noter : l'export ZIP filigrane toujours les pièces d'une session de
-      démonstration, ce chemin-là reste couvert.
+- [ ] **Rétablir le filigrane « données de démonstration » sur l'export ZIP**
+      (`src/lib/export/dossier.ts` : `watermarkDemo()` existe toujours dans
+      `./watermark`, seul son appel a été retiré) et **la mention du plan de
+      formation** (`src/lib/export/plan-pdf.ts`).
+      Restent en place aujourd'hui : le manifeste, qui signale chaque pièce de
+      démonstration et porte son bandeau, et le nom de l'archive, préfixé
+      `DEMONSTRATION_` quand tout le dossier en relève.
 - [ ] Décider si le générateur d'activité doit rester accessible une fois la
       plateforme ouverte à d'autres formateurs. Il est réservé à
       `can_generate_demo_data`, que seul le super-administrateur possède.
