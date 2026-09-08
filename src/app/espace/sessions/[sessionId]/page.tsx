@@ -6,6 +6,7 @@ import { SESSION_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { BlockView } from "@/components/content/block-view";
 
 // Programme d'une session : l'arbre figé de sa version (spec §11).
 export default async function SessionProgramPage({ params }: PageProps<"/espace/sessions/[sessionId]">) {
@@ -71,6 +72,15 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
             >
               Commencer la formation
             </Link>
+          ) : null}
+
+          {/* L'introduction ouvre le programme : le mot d'accueil et le plan. */}
+          {fv.introBlocks.length > 0 ? (
+            <section className="max-w-content border-b pb-6">
+              {fv.introBlocks.map((b) => (
+                <BlockView key={b.id} block={{ id: b.id, type: b.type, payload: b.payload }} />
+              ))}
+            </section>
           ) : null}
 
           <div className="space-y-6">

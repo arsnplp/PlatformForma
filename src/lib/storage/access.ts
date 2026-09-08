@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "@/lib/auth/session";
 import { canSupervise } from "@/lib/auth/ownership";
+import type { BlockTarget } from "@/lib/content/block-target";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CLOISONNEMENT DES FICHIERS
@@ -24,29 +25,22 @@ import { canSupervise } from "@/lib/auth/ownership";
 export type BlockAccess = { allowed: false } | { allowed: true; canEdit: boolean };
 
 export async function checkBlockFileAccess(blockId: string, me: CurrentUser): Promise<BlockAccess> {
+  // Un bloc pend à une leçon ou, pour l'introduction, à la version elle-même :
+  // dans les deux cas la règle porte sur la version qui le contient.
+  const versionSelect = {
+    id: true,
+    status: true,
+    formation: { select: { ownerId: true, archivedAt: true } },
+  } as const;
   const block = await prisma.contentBlock.findUnique({
     where: { id: blockId },
     select: {
-      lesson: {
-        select: {
-          module: {
-            select: {
-              formationVersion: {
-                select: {
-                  id: true,
-                  status: true,
-                  formation: { select: { ownerId: true, archivedAt: true } },
-                },
-              },
-            },
-          },
-        },
-      },
+      formationVersion: { select: versionSelect },
+      lesson: { select: { module: { select: { formationVersion: { select: versionSelect } } } } },
     },
   });
-  if (!block) return { allowed: false };
-
-  const version = block.lesson.module.formationVersion;
+  const version = block?.formationVersion ?? block?.lesson?.module.formationVersion;
+  if (!version) return { allowed: false };
   const owns = version.formation.ownerId === me.id;
   if (owns || canSupervise(me)) {
     return { allowed: true, canEdit: owns && version.status === "draft" && !version.formation.archivedAt };
@@ -62,14 +56,19 @@ export async function checkBlockFileAccess(blockId: string, me: CurrentUser): Pr
   return linked > 0 ? { allowed: true, canEdit: false } : { allowed: false };
 }
 
-// Même règle pour agir sur une leçon (envoi d'un fichier) : édition seulement.
-export async function checkLessonEdit(lessonId: string, me: CurrentUser): Promise<boolean> {
-  const lesson = await prisma.lesson.findUnique({
-    where: { id: lessonId },
-    select: { module: { select: { formationVersion: { select: { status: true, formation: { select: { ownerId: true, archivedAt: true } } } } } } },
-  });
-  if (!lesson) return false;
-  const v = lesson.module.formationVersion;
+// Même règle pour agir sur une pile de blocs (envoi d'un fichier) : édition
+// seulement, que la pile soit une leçon ou l'introduction de la version.
+export async function checkBlockTargetEdit(target: BlockTarget, me: CurrentUser): Promise<boolean> {
+  const v = target.lessonId
+    ? (await prisma.lesson.findUnique({
+        where: { id: target.lessonId },
+        select: { module: { select: { formationVersion: { select: { status: true, formation: { select: { ownerId: true, archivedAt: true } } } } } } },
+      }))?.module.formationVersion
+    : await prisma.formationVersion.findUnique({
+        where: { id: target.formationVersionId },
+        select: { status: true, formation: { select: { ownerId: true, archivedAt: true } } },
+      });
+  if (!v) return false;
   if (v.status !== "draft" || v.formation.archivedAt) return false;
   return v.formation.ownerId === me.id || canSupervise(me);
 }

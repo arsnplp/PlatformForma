@@ -30,6 +30,7 @@ import { NewVersionForm } from "@/components/formations/new-version-form";
 import { ProcessSection } from "@/components/formations/process-section";
 import { MailsSection } from "@/components/formations/mails-section";
 import { ExerciseList } from "@/components/content/exercise-list";
+import { IntroSection } from "@/components/content/intro-section";
 
 export default async function FormationPage({ params, searchParams }: PageProps<"/admin/formations/[id]">) {
   const { id } = await params;
@@ -49,7 +50,7 @@ export default async function FormationPage({ params, searchParams }: PageProps<
           modules: {
             orderBy: { order: "asc" },
             include: {
-              lessons: { orderBy: { order: "asc" }, include: { _count: { select: { contentBlocks: true } } } },
+              lessons: { orderBy: { order: "asc" }, include: { _count: { select: { contentBlocks: true, exercises: true } } } },
               _count: { select: { exercises: true } },
             },
           },
@@ -219,6 +220,9 @@ export default async function FormationPage({ params, searchParams }: PageProps<
               </p>
             ) : null}
 
+            {/* L'introduction ouvre toujours le programme : sa place est permanente. */}
+            <IntroSection versionId={current.id} editable={canEditContent} />
+
             {current.modules.length === 0 ? (
               <p className="text-sm text-foreground-secondary">Aucun module dans cette version.</p>
             ) : (
@@ -250,9 +254,17 @@ export default async function FormationPage({ params, searchParams }: PageProps<
                               </Link>
                               <span className="ml-2 text-xs text-foreground-tertiary">
                                 {l._count.contentBlocks} bloc(s) · {formatDuration(l.durationMinutes)}
+                                {l._count.exercises > 0 ? ` · ${l._count.exercises} exo(s)` : ""}
                               </span>
                             </span>
                             <span className="flex shrink-0 items-center gap-1">
+                              {canEditContent ? (
+                                <Button asChild variant="ghost" size="sm" className="h-7">
+                                  <Link href={`/admin/formations/${formation.id}/lecons/${l.id}/exercices/nouveau`}>
+                                    + exercice
+                                  </Link>
+                                </Button>
+                              ) : null}
                               {canEditContent ? (
                                 <form action={setLessonDuration.bind(null, l.id)} className="flex items-center gap-1">
                                   <Input

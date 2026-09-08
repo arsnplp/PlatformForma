@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { useRouter } from "next/navigation";
 import { addBlock, updateBlock, duplicateBlock, removeBlock, reorderBlocks } from "@/lib/actions/blocks";
 import type { BlockChoice } from "@/lib/content/block-types";
+import type { BlockTarget } from "@/lib/content/block-target";
 import { SlashMenu } from "./slash-menu";
 import { MediaPicker } from "./media-picker";
 import { VisioForm } from "./visio-form";
@@ -59,15 +60,21 @@ function AddZone({
 // Édition : on bascule un bloc en zone de texte Markdown ; à la sauvegarde,
 // le serveur re-rend le bloc. Un bloc = une ligne en base, réordonnable.
 export function BlockEditor({
-  lessonId,
+  target,
   blocks,
   rendered,
+  emptyLabel = "Cette leçon est vide.",
+  emptyAction = "Ajouter un premier bloc",
 }: {
-  lessonId: string;
+  /// Pile éditée : une leçon, ou l'introduction de la formation.
+  target: BlockTarget;
   blocks: EditorBlock[];
   /// Rendu de chaque bloc, calculé par le serveur : l'aperçu est exactement
   /// ce que verra l'élève, médias compris.
   rendered: Record<string, ReactNode>;
+  /// Ce qu'on lit quand la pile est vide : sa place reste visible, prête à servir.
+  emptyLabel?: string;
+  emptyAction?: string;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -131,7 +138,7 @@ export function BlockEditor({
     }
     const markdown = choice.template.replace("|", "");
     startTransition(async () => {
-      const { id } = await addBlock(lessonId, afterOrder, markdown);
+      const { id } = await addBlock(target, afterOrder, markdown);
       justCreated.current = id;
       setMenuAfter(null);
     });
@@ -145,7 +152,7 @@ export function BlockEditor({
     ids.splice(to, 0, ids.splice(from, 1)[0]);
     setDragId(null);
     setOverId(null);
-    startTransition(async () => { await reorderBlocks(lessonId, ids); });
+    startTransition(async () => { await reorderBlocks(target, ids); });
   }
 
   return (
@@ -155,7 +162,7 @@ export function BlockEditor({
       {visioAfter ? (
         <div className="flex justify-center py-2">
           <VisioForm
-            lessonId={lessonId}
+            target={target}
             afterOrder={visioAfter.afterOrder}
             onDone={() => { setVisioAfter(null); router.refresh(); }}
             onCancel={() => setVisioAfter(null)}
@@ -166,7 +173,7 @@ export function BlockEditor({
       {mediaAfter ? (
         <div className="flex justify-center py-2">
           <MediaPicker
-            lessonId={lessonId}
+            target={target}
             afterOrder={mediaAfter.afterOrder}
             mode={mediaAfter.mode}
             onDone={() => { setMediaAfter(null); router.refresh(); }}
@@ -177,10 +184,10 @@ export function BlockEditor({
 
       {blocks.length === 0 ? (
         <div className="rounded-lg border border-dashed px-6 py-10 text-center">
-          <p className="text-sm text-foreground-secondary">Cette leçon est vide.</p>
+          <p className="text-sm text-foreground-secondary">{emptyLabel}</p>
           <div className="mt-3 inline-block">
             <Button type="button" variant="outline" size="sm" onClick={() => setMenuAfter("end")}>
-              Ajouter un premier bloc
+              {emptyAction}
             </Button>
             {menuAfter === "end" ? (
               <div className="relative">

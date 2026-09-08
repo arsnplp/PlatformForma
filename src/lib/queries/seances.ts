@@ -44,7 +44,10 @@ export async function getSessionSeances(sessionId: string) {
         title: visio?.title ?? "Séance",
         durationMinutes: visio?.durationMinutes ?? 0,
         note: visio?.note ?? null,
-        place: `Module ${block.lesson.module.order} · ${block.lesson.module.title} — ${block.lesson.title}`,
+        // Une séance vit toujours dans une leçon ; l'introduction n'en porte pas.
+        place: block.lesson
+          ? `Module ${block.lesson.module.order} · ${block.lesson.module.title} — ${block.lesson.title}`
+          : "Introduction",
         seanceId: planned?.id ?? null,
         startsAt: planned?.startsAt ?? null,
         joinUrl: planned?.joinUrl ?? null,

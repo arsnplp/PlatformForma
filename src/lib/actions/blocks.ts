@@ -5,34 +5,43 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/auth/session";
 import { assertOwnerOrSupervisor } from "@/lib/auth/ownership";
+import { blockScope, blockOwner, targetOf, type BlockTarget } from "@/lib/content/block-target";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Les blocs appartiennent au MODÈLE : éditables tant que la version est en
 // brouillon, gelés dès publication. Une session lit le contenu figé de sa version.
+//
+// Une pile de blocs vit soit dans une leçon, soit en introduction de la version.
+// Tout ce qui suit est commun aux deux : seul le point d'attache diffère.
 
-type LessonContext = { lessonId: string; formationId: string; versionNumber: number };
+type BlockContext = { target: BlockTarget; formationId: string; versionNumber: number };
 
-async function loadDraftLesson(lessonId: string, me: CurrentUser): Promise<LessonContext> {
-  const lesson = await prisma.lesson.findUnique({
-    where: { id: lessonId },
-    include: { module: { include: { formationVersion: { include: { formation: true } } } } },
-  });
-  if (!lesson) throw new Error("Leçon introuvable");
-  const version = lesson.module.formationVersion;
+async function loadDraftTarget(target: BlockTarget, me: CurrentUser): Promise<BlockContext> {
+  const version = target.lessonId
+    ? (await prisma.lesson.findUnique({
+        where: { id: target.lessonId },
+        include: { module: { include: { formationVersion: { include: { formation: true } } } } },
+      }))?.module.formationVersion
+    : await prisma.formationVersion.findUnique({
+        where: { id: target.formationVersionId },
+        include: { formation: true },
+      });
+  if (!version) throw new Error(target.lessonId ? "Leçon introuvable" : "Version introuvable");
+
   assertOwnerOrSupervisor(me, version.formation.ownerId);
   if (version.formation.archivedAt) throw new Error("Formation archivée");
   if (version.status !== "draft") throw new Error("Version publiée : son contenu est gelé");
-  return { lessonId, formationId: version.formationId, versionNumber: version.versionNumber };
+  return { target, formationId: version.formationId, versionNumber: version.versionNumber };
 }
 
 async function loadDraftBlock(blockId: string, me: CurrentUser) {
   const block = await prisma.contentBlock.findUnique({ where: { id: blockId } });
   if (!block) throw new Error("Bloc introuvable");
-  return { block, ctx: await loadDraftLesson(block.lessonId, me) };
+  return { block, ctx: await loadDraftTarget(targetOf(block), me) };
 }
 
-function revalidate(ctx: LessonContext) {
-  revalidatePath(`/admin/formations/${ctx.formationId}/lecons/${ctx.lessonId}`);
+function revalidate(ctx: BlockContext) {
+  if (ctx.target.lessonId) revalidatePath(`/admin/formations/${ctx.formationId}/lecons/${ctx.target.lessonId}`);
   revalidatePath(`/admin/formations/${ctx.formationId}`);
 }
 
@@ -44,29 +53,37 @@ const markdownOf = (payload: Prisma.JsonValue): string => {
   return "";
 };
 
-// Décale par le haut pour respecter l'unicité (lessonId, order).
-async function shiftFrom(tx: Prisma.TransactionClient, lessonId: string, fromOrder: number) {
-  const toShift = await tx.contentBlock.findMany({ where: { lessonId, order: { gte: fromOrder } }, orderBy: { order: "desc" } });
+// Décale par le haut pour respecter l'unicité (cible, order).
+async function shiftFrom(tx: Prisma.TransactionClient, target: BlockTarget, fromOrder: number) {
+  const toShift = await tx.contentBlock.findMany({
+    where: { ...blockScope(target), order: { gte: fromOrder } },
+    orderBy: { order: "desc" },
+  });
   for (const b of toShift) await tx.contentBlock.update({ where: { id: b.id }, data: { order: b.order + 1 } });
 }
 
 // Renumérote 1..n après suppression.
-async function resequence(tx: Prisma.TransactionClient, lessonId: string) {
-  const blocks = await tx.contentBlock.findMany({ where: { lessonId }, orderBy: { order: "asc" } });
+async function resequence(tx: Prisma.TransactionClient, target: BlockTarget) {
+  const blocks = await tx.contentBlock.findMany({ where: blockScope(target), orderBy: { order: "asc" } });
   for (let i = 0; i < blocks.length; i++) await tx.contentBlock.update({ where: { id: blocks[i].id }, data: { order: -(i + 1) } });
   for (let i = 0; i < blocks.length; i++) await tx.contentBlock.update({ where: { id: blocks[i].id }, data: { order: i + 1 } });
 }
 
-export async function addBlock(lessonId: string, afterOrder: number | null, markdown: string) {
+// Rang du prochain bloc : à la suite, ou juste après celui qu'on désigne.
+async function nextOrder(target: BlockTarget, afterOrder: number | null): Promise<number> {
+  if (afterOrder !== null) return afterOrder + 1;
+  const last = await prisma.contentBlock.findFirst({ where: blockScope(target), orderBy: { order: "desc" } });
+  return (last?.order ?? 0) + 1;
+}
+
+export async function addBlock(target: BlockTarget, afterOrder: number | null, markdown: string) {
   const me = await requirePermission("can_edit_formation");
-  const ctx = await loadDraftLesson(lessonId, me);
-  const at = afterOrder === null
-    ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
-    : afterOrder + 1;
+  const ctx = await loadDraftTarget(target, me);
+  const at = await nextOrder(target, afterOrder);
 
   const created = await prisma.$transaction(async (tx) => {
-    await shiftFrom(tx, lessonId, at);
-    return tx.contentBlock.create({ data: { lessonId, order: at, type: "text", payload: { markdown } } });
+    await shiftFrom(tx, target, at);
+    return tx.contentBlock.create({ data: { ...blockOwner(target), order: at, type: "text", payload: { markdown } } });
   });
   revalidate(ctx);
   return { id: created.id };
@@ -82,22 +99,19 @@ const visioSchema = z.object({
 // Sa date et son lien se renseignent session par session (voir Seance), parce
 // qu'une même version de formation sert plusieurs sessions.
 export async function addVisioBlock(
-  lessonId: string,
+  target: BlockTarget,
   afterOrder: number | null,
   input: { title: string; durationMinutes: number; note?: string },
 ) {
   const me = await requirePermission("can_edit_formation");
-  const ctx = await loadDraftLesson(lessonId, me);
+  const ctx = await loadDraftTarget(target, me);
   const parsed = visioSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const at = afterOrder === null
-    ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
-    : afterOrder + 1;
+  const at = await nextOrder(target, afterOrder);
 
   const created = await prisma.$transaction(async (tx) => {
-    await shiftFrom(tx, lessonId, at);
-    return tx.contentBlock.create({ data: { lessonId, order: at, type: "visio", payload: parsed.data } });
+    await shiftFrom(tx, target, at);
+    return tx.contentBlock.create({ data: { ...blockOwner(target), order: at, type: "visio", payload: parsed.data } });
   });
   revalidate(ctx);
   return { id: created.id };
@@ -134,10 +148,11 @@ export async function updateBlock(blockId: string, markdown: string) {
 export async function duplicateBlock(blockId: string) {
   const me = await requirePermission("can_edit_formation");
   const { block, ctx } = await loadDraftBlock(blockId, me);
+  const target = targetOf(block);
   await prisma.$transaction(async (tx) => {
-    await shiftFrom(tx, block.lessonId, block.order + 1);
+    await shiftFrom(tx, target, block.order + 1);
     await tx.contentBlock.create({
-      data: { lessonId: block.lessonId, order: block.order + 1, type: block.type, payload: { markdown: markdownOf(block.payload) } },
+      data: { ...blockOwner(target), order: block.order + 1, type: block.type, payload: { markdown: markdownOf(block.payload) } },
     });
   });
   revalidate(ctx);
@@ -152,16 +167,16 @@ export async function removeBlock(blockId: string) {
   if (planned > 0) throw new Error("Cette séance est planifiée sur une session : elle ne peut plus être retirée");
   await prisma.$transaction(async (tx) => {
     await tx.contentBlock.delete({ where: { id: block.id } });
-    await resequence(tx, block.lessonId);
+    await resequence(tx, ctx.target);
   });
   revalidate(ctx);
 }
 
 // Réordonnancement complet (glisser-déposer) : on reçoit l'ordre voulu.
-export async function reorderBlocks(lessonId: string, orderedIds: string[]) {
+export async function reorderBlocks(target: BlockTarget, orderedIds: string[]) {
   const me = await requirePermission("can_edit_formation");
-  const ctx = await loadDraftLesson(lessonId, me);
-  const existing = await prisma.contentBlock.findMany({ where: { lessonId }, select: { id: true } });
+  const ctx = await loadDraftTarget(target, me);
+  const existing = await prisma.contentBlock.findMany({ where: blockScope(target), select: { id: true } });
   const known = new Set(existing.map((b) => b.id));
   if (orderedIds.length !== existing.length || orderedIds.some((id) => !known.has(id))) {
     throw new Error("Ordre invalide");

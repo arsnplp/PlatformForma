@@ -4,10 +4,11 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/session";
-import { checkLessonEdit, checkBlockFileAccess } from "@/lib/storage/access";
+import { checkBlockTargetEdit, checkBlockFileAccess } from "@/lib/storage/access";
 import { createUploadUrl, removeFile } from "@/lib/storage/client";
 import { MAX_FILE_BYTES, kindOf, safeFileName, formatBytes } from "@/lib/storage/config";
 import { parseEmbedUrl, readFile } from "@/lib/content/block-payload";
+import { blockScope, blockOwner, targetOf, type BlockTarget } from "@/lib/content/block-target";
 import type { ContentBlockType } from "@/generated/prisma/enums";
 
 // Le fichier ne transite jamais par le serveur applicatif : le navigateur
@@ -16,21 +17,24 @@ import type { ContentBlockType } from "@/generated/prisma/enums";
 
 export type UploadTicket = { ok: true; signedUrl: string; token: string; path: string } | { ok: false; error: string };
 
-export async function requestUpload(lessonId: string, fileName: string, mimeType: string, sizeBytes: number): Promise<UploadTicket> {
+export async function requestUpload(target: BlockTarget, fileName: string, mimeType: string, sizeBytes: number): Promise<UploadTicket> {
   const me = await requirePermission("can_edit_formation");
-  if (!(await checkLessonEdit(lessonId, me))) return { ok: false, error: "Leçon non modifiable." };
+  if (!(await checkBlockTargetEdit(target, me))) return { ok: false, error: "Contenu non modifiable." };
 
   const kind = kindOf(mimeType);
   if (!kind) return { ok: false, error: `Type de fichier non accepté (${mimeType}).` };
   if (sizeBytes <= 0) return { ok: false, error: "Fichier vide." };
   if (sizeBytes > MAX_FILE_BYTES) return { ok: false, error: `Fichier trop lourd (${formatBytes(sizeBytes)}), maximum ${formatBytes(MAX_FILE_BYTES)}.` };
 
-  const lesson = await prisma.lesson.findUniqueOrThrow({
-    where: { id: lessonId },
-    select: { module: { select: { formationVersionId: true } } },
-  });
+  const versionId = target.lessonId
+    ? (await prisma.lesson.findUniqueOrThrow({
+        where: { id: target.lessonId },
+        select: { module: { select: { formationVersionId: true } } },
+      })).module.formationVersionId
+    : target.formationVersionId;
   // Le chemin porte la version : un fichier appartient au contenu d'une version.
-  const path = `versions/${lesson.module.formationVersionId}/${lessonId}/${randomUUID()}-${safeFileName(fileName)}`;
+  // Le second segment dit dans quelle pile il vit — une leçon, ou l'introduction.
+  const path = `versions/${versionId}/${target.lessonId ?? "introduction"}/${randomUUID()}-${safeFileName(fileName)}`;
 
   try {
     const ticket = await createUploadUrl(path);
@@ -42,28 +46,29 @@ export async function requestUpload(lessonId: string, fileName: string, mimeType
 
 // Une fois le fichier déposé, on crée le bloc qui le référence.
 export async function attachUploadedFile(
-  lessonId: string,
+  target: BlockTarget,
   afterOrder: number | null,
   file: { path: string; name: string; mimeType: string; sizeBytes: number; alt?: string; caption?: string },
 ) {
   const me = await requirePermission("can_edit_formation");
-  if (!(await checkLessonEdit(lessonId, me))) throw new Error("Leçon non modifiable.");
+  if (!(await checkBlockTargetEdit(target, me))) throw new Error("Contenu non modifiable.");
   const kind = kindOf(file.mimeType);
   if (!kind) throw new Error("Type de fichier non accepté.");
-  if (!file.path.startsWith(`versions/`) || !file.path.includes(`/${lessonId}/`)) throw new Error("Chemin de fichier invalide.");
+  const segment = target.lessonId ?? "introduction";
+  if (!file.path.startsWith(`versions/`) || !file.path.includes(`/${segment}/`)) throw new Error("Chemin de fichier invalide.");
 
   const type: ContentBlockType =
     kind === "image" ? "image" : kind === "pdf" ? "pdf" : kind === "video" ? "video" : "file";
   const at = afterOrder === null
-    ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
+    ? ((await prisma.contentBlock.findFirst({ where: blockScope(target), orderBy: { order: "desc" } }))?.order ?? 0) + 1
     : afterOrder + 1;
 
   const created = await prisma.$transaction(async (tx) => {
-    const toShift = await tx.contentBlock.findMany({ where: { lessonId, order: { gte: at } }, orderBy: { order: "desc" } });
+    const toShift = await tx.contentBlock.findMany({ where: { ...blockScope(target), order: { gte: at } }, orderBy: { order: "desc" } });
     for (const b of toShift) await tx.contentBlock.update({ where: { id: b.id }, data: { order: b.order + 1 } });
     return tx.contentBlock.create({
       data: {
-        lessonId, order: at, type,
+        ...blockOwner(target), order: at, type,
         payload: { path: file.path, name: file.name, mimeType: file.mimeType, sizeBytes: file.sizeBytes, alt: file.alt ?? "", caption: file.caption ?? "" },
       },
     });
@@ -73,20 +78,20 @@ export async function attachUploadedFile(
 }
 
 // Vidéo hébergée ailleurs (YouTube, Vimeo) : rien à stocker.
-export async function addEmbedBlock(lessonId: string, afterOrder: number | null, rawUrl: string) {
+export async function addEmbedBlock(target: BlockTarget, afterOrder: number | null, rawUrl: string) {
   const me = await requirePermission("can_edit_formation");
-  if (!(await checkLessonEdit(lessonId, me))) throw new Error("Leçon non modifiable.");
+  if (!(await checkBlockTargetEdit(target, me))) throw new Error("Contenu non modifiable.");
   const embed = parseEmbedUrl(rawUrl);
   if (!embed) return { error: "Lien non reconnu. Seuls YouTube et Vimeo sont acceptés." };
 
   const at = afterOrder === null
-    ? ((await prisma.contentBlock.findFirst({ where: { lessonId }, orderBy: { order: "desc" } }))?.order ?? 0) + 1
+    ? ((await prisma.contentBlock.findFirst({ where: blockScope(target), orderBy: { order: "desc" } }))?.order ?? 0) + 1
     : afterOrder + 1;
 
   await prisma.$transaction(async (tx) => {
-    const toShift = await tx.contentBlock.findMany({ where: { lessonId, order: { gte: at } }, orderBy: { order: "desc" } });
+    const toShift = await tx.contentBlock.findMany({ where: { ...blockScope(target), order: { gte: at } }, orderBy: { order: "desc" } });
     for (const b of toShift) await tx.contentBlock.update({ where: { id: b.id }, data: { order: b.order + 1 } });
-    await tx.contentBlock.create({ data: { lessonId, order: at, type: "embed", payload: { ...embed } } });
+    await tx.contentBlock.create({ data: { ...blockOwner(target), order: at, type: "embed", payload: { ...embed } } });
   });
   return { ok: true };
 }
@@ -114,9 +119,10 @@ export async function removeMediaBlock(blockId: string) {
   const block = await prisma.contentBlock.findUniqueOrThrow({ where: { id: blockId } });
   const file = readFile(block.payload);
 
+  const scope = blockScope(targetOf(block));
   await prisma.$transaction(async (tx) => {
     await tx.contentBlock.delete({ where: { id: blockId } });
-    const rest = await tx.contentBlock.findMany({ where: { lessonId: block.lessonId }, orderBy: { order: "asc" } });
+    const rest = await tx.contentBlock.findMany({ where: scope, orderBy: { order: "asc" } });
     for (let i = 0; i < rest.length; i++) await tx.contentBlock.update({ where: { id: rest[i].id }, data: { order: -(i + 1) } });
     for (let i = 0; i < rest.length; i++) await tx.contentBlock.update({ where: { id: rest[i].id }, data: { order: i + 1 } });
   });

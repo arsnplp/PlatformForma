@@ -6,19 +6,20 @@ import { requestUpload, attachUploadedFile, addEmbedBlock } from "@/lib/actions/
 import { CONTENT_BUCKET, MAX_FILE_BYTES, ALLOWED_TYPES, formatBytes } from "@/lib/storage/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { BlockTarget } from "@/lib/content/block-target";
 
 const ACCEPT = [...ALLOWED_TYPES.image, ...ALLOWED_TYPES.pdf, ...ALLOWED_TYPES.video, ...ALLOWED_TYPES.document].join(",");
 
 // Envoi direct navigateur → Supabase : le fichier ne passe pas par le serveur
 // applicatif. L'autorisation est délivrée à l'unité, après vérification des droits.
 export function MediaPicker({
-  lessonId,
+  target,
   afterOrder,
   mode,
   onDone,
   onCancel,
 }: {
-  lessonId: string;
+  target: BlockTarget;
   afterOrder: number | null;
   mode: "file" | "embed";
   onDone: () => void;
@@ -39,7 +40,7 @@ export function MediaPicker({
     setBusy(true);
     setProgress("Préparation…");
     try {
-      const ticket = await requestUpload(lessonId, file.name, file.type, file.size);
+      const ticket = await requestUpload(target, file.name, file.type, file.size);
       if (!ticket.ok) { setError(ticket.error); return; }
 
       setProgress(`Envoi de ${file.name} (${formatBytes(file.size)})…`);
@@ -53,7 +54,7 @@ export function MediaPicker({
       if (upErr) { setError(`Envoi échoué : ${upErr.message}`); return; }
 
       setProgress("Ajout du bloc…");
-      await attachUploadedFile(lessonId, afterOrder, {
+      await attachUploadedFile(target, afterOrder, {
         path: ticket.path, name: file.name, mimeType: file.type, sizeBytes: file.size,
       });
       onDone();
@@ -69,7 +70,7 @@ export function MediaPicker({
     setError(null);
     setBusy(true);
     try {
-      const result = await addEmbedBlock(lessonId, afterOrder, url);
+      const result = await addEmbedBlock(target, afterOrder, url);
       if (result?.error) { setError(result.error); return; }
       onDone();
     } finally {

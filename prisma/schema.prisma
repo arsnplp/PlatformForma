@@ -390,6 +390,8 @@ model FormationVersion {
   sessions         Session[]
   processTemplates ProcessTemplate[]
   messageTemplates MessageTemplate[]
+  /// Blocs d'introduction : le mot d'accueil et le plan, en tête de formation.
+  introBlocks      ContentBlock[]
 
   @@unique([formationId, versionNumber])
   @@index([formationId, status])
@@ -441,20 +443,28 @@ model Lesson {
 }
 
 /// Une leçon = une pile de blocs réordonnables (modèle Notion).
+///
+/// Un bloc pend soit à une leçon, soit — pour l'introduction de la formation —
+/// directement à la version. Exactement l'un des deux, garanti en base par la
+/// contrainte `content_blocks_owner_check`.
 model ContentBlock {
-  id        String           @id @default(uuid()) @db.Uuid
-  lessonId  String           @map("lesson_id") @db.Uuid
-  order     Int
-  type      ContentBlockType
-  payload   Json             @map("payload_json")
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
+  id                 String           @id @default(uuid()) @db.Uuid
+  lessonId           String?          @map("lesson_id") @db.Uuid
+  /// Introduction de la formation : la page d'accueil, avant le premier module.
+  formationVersionId String?          @map("formation_version_id") @db.Uuid
+  order              Int
+  type               ContentBlockType
+  payload            Json             @map("payload_json")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
 
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  lesson           Lesson?           @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  formationVersion FormationVersion? @relation(fields: [formationVersionId], references: [id], onDelete: Restrict)
 
   seances Seance[]
 
   @@unique([lessonId, order])
+  @@unique([formationVersionId, order])
   @@map("content_blocks")
 }
 

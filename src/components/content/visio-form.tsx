@@ -6,19 +6,20 @@ import { addVisioBlock, updateVisioBlock } from "@/lib/actions/blocks";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/admin/form-field";
+import type { BlockTarget } from "@/lib/content/block-target";
 
 // Le bloc visio décrit la SÉANCE : son intitulé et sa durée. La date et le lien
 // se renseignent sur chaque session, puisqu'une même version sert plusieurs
 // sessions avec des calendriers différents.
 export function VisioForm({
-  lessonId,
+  target,
   afterOrder,
   blockId,
   initial,
   onDone,
   onCancel,
 }: {
-  lessonId?: string;
+  target?: BlockTarget;
   afterOrder?: number | null;
   blockId?: string;
   initial?: { title: string; durationMinutes: number; note?: string };
@@ -38,7 +39,7 @@ export function VisioForm({
       const input = { title, durationMinutes: Number(duration), note: note.trim() || undefined };
       const result = blockId
         ? await updateVisioBlock(blockId, input)
-        : await addVisioBlock(lessonId!, afterOrder ?? null, input);
+        : await addVisioBlock(target!, afterOrder ?? null, input);
       if (result && "error" in result && result.error) { setError(result.error); return; }
       router.refresh();
       onDone();

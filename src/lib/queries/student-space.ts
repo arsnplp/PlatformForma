@@ -59,6 +59,7 @@ export function getSessionProgram(sessionId: string) {
       formationVersion: {
         include: {
           formation: { select: { name: true, sector: true, description: true } },
+          introBlocks: { orderBy: { order: "asc" } },
           modules: {
             orderBy: { order: "asc" },
             include: {

@@ -75,7 +75,7 @@ export default async function LessonPage({ params }: PageProps<"/admin/formation
 
       <article className="max-w-content">
         {editable ? (
-          <BlockEditor lessonId={lesson.id} blocks={blocks} rendered={rendered} />
+          <BlockEditor target={{ lessonId: lesson.id }} blocks={blocks} rendered={rendered} />
         ) : blocks.length === 0 ? (
           <p className="text-sm text-foreground-tertiary">Cette leçon ne contient aucun bloc.</p>
         ) : (
