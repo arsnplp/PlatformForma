@@ -1,11 +1,14 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { todayInParis } from "@/lib/process/today";
 
 // Lecture du temps de connexion : ce qui nourrit la vue analytique du
 // formateur et le relevé FOAD remis au financeur.
 
-export type DailyRow = { day: Date; seconds: number };
+/// `simulated` : part du total produite par le générateur, pour distinguer
+/// d'un coup d'œil ce qui a été mesuré de ce qui a été fabriqué.
+export type DailyRow = { day: Date; seconds: number; simulatedSeconds: number };
 export type ScopeRow = { label: string; seconds: number };
 
 export async function getStudentSessionTime(sessionId: string, userId: string) {
@@ -27,9 +30,12 @@ export async function getStudentSessionTime(sessionId: string, userId: string) {
       orderBy: { order: "asc" },
       select: { id: true, order: true, title: true, lessons: { orderBy: { order: "asc" }, select: { id: true, order: true, title: true } } },
     }),
-    // Des traces fabriquées entrent-elles dans ce total ? Un relevé doit
-    // pouvoir dire quand il n'est pas une mesure.
-    prisma.activityLog.count({ where: { sessionId, userId, isDemo: true } }),
+    // Détail des traces fabriquées, jour par jour : c'est ce qui permet de ne
+    // jamais confondre une journée mesurée et une journée simulée.
+    prisma.activityLog.findMany({
+      where: { sessionId, userId, isDemo: true, eventType: "heartbeat" },
+      select: { at: true, durationSeconds: true },
+    }),
   ]);
 
   const lessonTitle = new Map<string, string>();
@@ -45,8 +51,16 @@ export async function getStudentSessionTime(sessionId: string, userId: string) {
     if (row.scopeType !== "session") continue;
     byDay.set(row.day.getTime(), (byDay.get(row.day.getTime()) ?? 0) + row.totalSeconds);
   }
+
+  // Même découpage pour la part fabriquée, au même repère de jour français.
+  const simulatedByDay = new Map<number, number>();
+  for (const log of simulated) {
+    const key = todayInParis(log.at).getTime();
+    simulatedByDay.set(key, (simulatedByDay.get(key) ?? 0) + (log.durationSeconds ?? 0));
+  }
+
   const days: DailyRow[] = [...byDay.entries()]
-    .map(([time, seconds]) => ({ day: new Date(time), seconds }))
+    .map(([time, seconds]) => ({ day: new Date(time), seconds, simulatedSeconds: simulatedByDay.get(time) ?? 0 }))
     .sort((a, b) => a.day.getTime() - b.day.getTime());
 
   const sum = (type: "module" | "lesson", titles: Map<string, string>): ScopeRow[] => {
@@ -60,10 +74,13 @@ export async function getStudentSessionTime(sessionId: string, userId: string) {
       .sort((a, b) => b.seconds - a.seconds);
   };
 
+  const simulatedSeconds = simulated.reduce((total, log) => total + (log.durationSeconds ?? 0), 0);
+
   return {
     session,
     /// Le total inclut des traces fabriquées : le relevé le signale.
-    simulated: simulated > 0,
+    simulated: simulated.length > 0,
+    simulatedSeconds,
     days,
     modules: sum("module", moduleTitle),
     lessons: sum("lesson", lessonTitle),

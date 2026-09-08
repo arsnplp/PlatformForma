@@ -36,9 +36,12 @@ export async function StudentTime({
         <GenerateTimeSheet sessionId={sessionId} userId={userId} />
       </div>
 
-      {report.simulated ? (
+      {canGenerate && report.simulated ? (
         <p className="rounded-md bg-status-orange-bg px-3 py-2 text-xs text-status-orange">
-          Ce total contient une activité simulée : le relevé le mentionne et ne vaut pas preuve d&apos;assiduité.
+          <strong>{formatSeconds(report.simulatedSeconds)}</strong> de ce total sont simulés
+          {report.totalSeconds > report.simulatedSeconds
+            ? ` — ${formatSeconds(report.totalSeconds - report.simulatedSeconds)} de connexion réelle.`
+            : " : aucune connexion réelle."}
         </p>
       ) : null}
 
@@ -63,7 +66,14 @@ export async function StudentTime({
             <ul className="mt-1 space-y-0.5 text-sm">
               {report.days.map((day) => (
                 <li key={day.day.toISOString()} className="flex justify-between gap-3">
-                  <span>{dayFmt.format(day.day)}</span>
+                  <span className="flex items-center gap-2">
+                    {dayFmt.format(day.day)}
+                    {canGenerate && day.simulatedSeconds > 0 ? (
+                      <span className="rounded-sm bg-status-orange-bg px-1.5 text-[11px] text-status-orange">
+                        {day.simulatedSeconds >= day.seconds ? "simulé" : "partiellement simulé"}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="tabular-nums text-foreground-secondary">{formatSeconds(day.seconds)}</span>
                 </li>
               ))}
