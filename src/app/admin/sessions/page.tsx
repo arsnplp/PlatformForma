@@ -11,15 +11,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ListFilters } from "@/components/admin/list-filters";
 
 export default async function SessionsPage({ searchParams }: PageProps<"/admin/sessions">) {
   const me = await requireUser("/admin/sessions");
   if (!hasPermission(me, "can_manage_sessions")) redirect("/admin");
-  const cancelled = (await searchParams).cancelled === "1";
+  const params = await searchParams;
+  const cancelled = params.cancelled === "1";
   const supervisor = canSupervise(me);
+  const search = typeof params.q === "string" ? params.q.trim() : "";
+  const status = typeof params.statut === "string" ? params.statut : "";
+  const formationId = typeof params.formation === "string" ? params.formation : "";
+
+  // Les formations proposées au filtre sont celles qui ont réellement des
+  // sessions dans mon périmètre : une liste déroulante vide n'aide personne.
+  const formations = await prisma.formation.findMany({
+    where: { ...ownerFilter(me), versions: { some: { sessions: { some: {} } } } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
   const sessions = await prisma.session.findMany({
-    where: { ...(cancelled ? { status: "cancelled" } : { status: { not: "cancelled" } }), ...ownerFilter(me) },
+    where: {
+      ...(cancelled ? { status: "cancelled" } : { status: { not: "cancelled" } }),
+      ...ownerFilter(me),
+      ...(status ? { status: status as never } : {}),
+      ...(formationId ? { formationVersion: { formationId } } : {}),
+      // La recherche porte sur ce qu'on a en tête : le nom de la session,
+      // celui de la formation, ou l'entreprise cliente.
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { company: { name: { contains: search, mode: "insensitive" as const } } },
+              { formationVersion: { formation: { name: { contains: search, mode: "insensitive" as const } } } },
+            ],
+          }
+        : {}),
+    },
     include: {
       owner: { select: { name: true } },
       trainer: { select: { name: true } },
@@ -52,8 +81,28 @@ export default async function SessionsPage({ searchParams }: PageProps<"/admin/s
         </Link>
       </div>
 
+      <ListFilters
+        searchPlaceholder="Nom de session, formation ou entreprise"
+        filters={[
+          {
+            key: "statut",
+            label: "Statut",
+            allLabel: "Tous les statuts",
+            options: Object.entries(SESSION_STATUS)
+              .filter(([key]) => key !== "cancelled")
+              .map(([key, value]) => ({ value: key, label: value.label })),
+          },
+          {
+            key: "formation",
+            label: "Formation",
+            allLabel: "Toutes les formations",
+            options: formations.map((f) => ({ value: f.id, label: f.name })),
+          },
+        ]}
+      />
+
       {sessions.length === 0 ? (
-        <EmptyState title={cancelled ? "Aucune session annulée" : "Aucune session"} />
+        <EmptyState title={search || status || formationId ? "Aucune session pour ces critères" : cancelled ? "Aucune session annulée" : "Aucune session"} />
       ) : (
         <Table>
           <TableHeader>

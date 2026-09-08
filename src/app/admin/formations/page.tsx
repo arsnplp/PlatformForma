@@ -11,15 +11,39 @@ import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ArchivedToggle } from "@/components/admin/archived-toggle";
+import { ListFilters } from "@/components/admin/list-filters";
 
 export default async function FormationsPage({ searchParams }: PageProps<"/admin/formations">) {
   const me = await requireUser("/admin/formations");
   if (!hasPermission(me, "can_edit_formation")) redirect("/admin");
-  const archived = (await searchParams).archived === "1";
+  const params = await searchParams;
+  const archived = params.archived === "1";
   const supervisor = canSupervise(me);
+  const search = typeof params.q === "string" ? params.q.trim() : "";
+  const sector = typeof params.secteur === "string" ? params.secteur : "";
+
+  // Les secteurs proposés sont ceux réellement utilisés.
+  const sectors = await prisma.formation.findMany({
+    where: { ...ownerFilter(me), sector: { not: null } },
+    distinct: ["sector"],
+    orderBy: { sector: "asc" },
+    select: { sector: true },
+  });
 
   const formations = await prisma.formation.findMany({
-    where: { ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }), ...ownerFilter(me) },
+    where: {
+      ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
+      ...ownerFilter(me),
+      ...(sector ? { sector } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { description: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
     include: {
       owner: { select: { name: true } },
       versions: { orderBy: { versionNumber: "desc" }, select: { versionNumber: true, status: true, _count: { select: { sessions: true } } } },
@@ -40,8 +64,23 @@ export default async function FormationsPage({ searchParams }: PageProps<"/admin
       />
       <ArchivedToggle basePath="/admin/formations" archived={archived} />
 
+      <ListFilters
+        searchPlaceholder="Nom ou description d'une formation"
+        filters={[
+          {
+            key: "secteur",
+            label: "Secteur",
+            allLabel: "Tous les secteurs",
+            options: sectors
+              .map((s) => s.sector)
+              .filter((s): s is string => Boolean(s))
+              .map((s) => ({ value: s, label: s })),
+          },
+        ]}
+      />
+
       {formations.length === 0 ? (
-        <EmptyState title={archived ? "Aucune formation archivée" : "Aucune formation"}>
+        <EmptyState title={search || sector ? "Aucune formation pour ces critères" : archived ? "Aucune formation archivée" : "Aucune formation"}>
           {!archived ? "Crée ta première formation : elle démarre en brouillon v1." : null}
         </EmptyState>
       ) : (

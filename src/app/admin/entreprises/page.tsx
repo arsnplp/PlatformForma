@@ -9,15 +9,41 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ArchivedToggle } from "@/components/admin/archived-toggle";
+import { ListFilters } from "@/components/admin/list-filters";
 
 export default async function CompaniesPage({ searchParams }: PageProps<"/admin/entreprises">) {
   const me = await requireUser("/admin/entreprises");
   if (!hasPermission(me, "can_manage_companies")) redirect("/admin");
-  const archived = (await searchParams).archived === "1";
+  const params = await searchParams;
+  const archived = params.archived === "1";
   const supervisor = canSupervise(me);
+  const search = typeof params.q === "string" ? params.q.trim() : "";
+  const sector = typeof params.secteur === "string" ? params.secteur : "";
+
+  const sectors = await prisma.company.findMany({
+    where: { ...ownerFilter(me), sector: { not: null } },
+    distinct: ["sector"],
+    orderBy: { sector: "asc" },
+    select: { sector: true },
+  });
 
   const companies = await prisma.company.findMany({
-    where: { ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }), ...ownerFilter(me) },
+    where: {
+      ...(archived ? { archivedAt: { not: null } } : { archivedAt: null }),
+      ...ownerFilter(me),
+      ...(sector ? { sector } : {}),
+      // Nom, SIRET ou contact : les trois façons de chercher une entreprise.
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" as const } },
+              { siret: { contains: search } },
+              { contactName: { contains: search, mode: "insensitive" as const } },
+              { contactEmail: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
     include: {
       owner: { select: { name: true } },
       _count: { select: { sessions: true } },
@@ -42,6 +68,21 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/admin/
       />
 
       <ArchivedToggle basePath="/admin/entreprises" archived={archived} />
+
+      <ListFilters
+        searchPlaceholder="Nom, SIRET ou contact"
+        filters={[
+          {
+            key: "secteur",
+            label: "Secteur",
+            allLabel: "Tous les secteurs",
+            options: sectors
+              .map((s) => s.sector)
+              .filter((s): s is string => Boolean(s))
+              .map((s) => ({ value: s, label: s })),
+          },
+        ]}
+      />
 
       {companies.length === 0 ? (
         <EmptyState title={archived ? "Aucune entreprise archivée" : "Aucune entreprise"}>

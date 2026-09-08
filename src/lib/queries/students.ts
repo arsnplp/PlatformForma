@@ -20,13 +20,30 @@ export function enrollmentScope(me: CurrentUser): Prisma.EnrollmentWhereInput {
   return canSupervise(me) ? {} : { session: { OR: [{ ownerId: me.id }, { trainerId: me.id }] } };
 }
 
-// Axe Élève — liste, avec recherche nom/email (insensible à la casse).
-export function listStudents(me: CurrentUser, search = "") {
+// Axe Élève — liste, avec recherche nom/email et filtres de tri du dossier.
+export function listStudents(
+  me: CurrentUser,
+  search = "",
+  filters: { sessionId?: string; status?: string } = {},
+) {
   const q = search.trim();
   return prisma.user.findMany({
     where: {
       ...studentScope(me),
       ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] } : {}),
+      // Filtrer par session ou par statut d'inscription revient à ne garder que
+      // les élèves ayant AU MOINS une inscription qui correspond.
+      ...(filters.sessionId || filters.status
+        ? {
+            enrollments: {
+              some: {
+                ...enrollmentScope(me),
+                ...(filters.sessionId ? { sessionId: filters.sessionId } : {}),
+                ...(filters.status ? { status: filters.status as never } : {}),
+              },
+            },
+          }
+        : {}),
     },
     select: {
       id: true,

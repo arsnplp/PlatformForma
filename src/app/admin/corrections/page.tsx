@@ -11,17 +11,42 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ListFilters } from "@/components/admin/list-filters";
 
 // File « à corriger » (spec §8.2 / phase 4) : les copies en attente des
 // sessions que je possède ou que j'anime.
 export default async function CorrectionsPage({ searchParams }: PageProps<"/admin/corrections">) {
   const me = await requireUser("/admin/corrections");
   if (!hasPermission(me, "can_correct_exercises")) redirect("/admin");
-  const done = (await searchParams).done === "1";
+  const params = await searchParams;
+  const done = params.done === "1";
+  const search = typeof params.q === "string" ? params.q.trim() : "";
+  const sessionId = typeof params.session === "string" ? params.session : "";
 
   const sessionScope = canSupervise(me) ? {} : { OR: [{ ownerId: me.id }, { trainerId: me.id }] };
+
+  const sessions = await prisma.session.findMany({
+    where: { ...sessionScope, submissions: { some: {} } },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true },
+  });
+
   const submissions = await prisma.submission.findMany({
-    where: { status: done ? "graded" : "submitted", session: sessionScope },
+    where: {
+      status: done ? "graded" : "submitted",
+      session: sessionScope,
+      ...(sessionId ? { sessionId } : {}),
+      // On cherche une copie par l'élève qui l'a rendue ou par l'exercice.
+      ...(search
+        ? {
+            OR: [
+              { user: { name: { contains: search, mode: "insensitive" as const } } },
+              { user: { email: { contains: search, mode: "insensitive" as const } } },
+              { exercise: { title: { contains: search, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+    },
     include: {
       user: { select: { id: true, name: true, email: true } },
       exercise: { select: { title: true, type: true, maxScore: true } },
@@ -46,8 +71,20 @@ export default async function CorrectionsPage({ searchParams }: PageProps<"/admi
         <Link href="/admin/corrections?done=1" className={cn(toggle, done ? "bg-background font-medium shadow-sm" : "text-foreground-secondary hover:text-foreground")}>Corrigées</Link>
       </div>
 
+      <ListFilters
+        searchPlaceholder="Élève ou intitulé d'exercice"
+        filters={[
+          {
+            key: "session",
+            label: "Session",
+            allLabel: "Toutes les sessions",
+            options: sessions.map((s) => ({ value: s.id, label: s.name })),
+          },
+        ]}
+      />
+
       {submissions.length === 0 ? (
-        <EmptyState title={done ? "Aucune copie corrigée" : "Rien à corriger"}>
+        <EmptyState title={search || sessionId ? "Aucune copie pour ces critères" : done ? "Aucune copie corrigée" : "Rien à corriger"}>
           {!done ? "Les rédactions et les livrables rendus par vos élèves apparaîtront ici." : null}
         </EmptyState>
       ) : (

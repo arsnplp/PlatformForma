@@ -8,15 +8,30 @@ import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ListFilters } from "@/components/admin/list-filters";
 
 // Tous mes fils, le plus récent d'abord : un fil par élève et par session.
-export default async function ConversationsInboxPage() {
+export default async function ConversationsInboxPage({ searchParams }: PageProps<"/admin/conversations">) {
   const me = await requireUser("/admin/conversations");
   if (!hasPermission(me, "can_manage_sessions")) redirect("/admin");
 
+  const params = await searchParams;
+  const search = typeof params.q === "string" ? params.q.trim() : "";
+  const onlyUnread = params.etat === "alire";
+
   const sessionScope = canSupervise(me) ? {} : { OR: [{ ownerId: me.id }, { trainerId: me.id }] };
   const conversations = await prisma.conversation.findMany({
-    where: { session: sessionScope },
+    where: {
+      session: sessionScope,
+      ...(search
+        ? {
+            OR: [
+              { user: { name: { contains: search, mode: "insensitive" as const } } },
+              { session: { name: { contains: search, mode: "insensitive" as const } } },
+            ],
+          }
+        : {}),
+    },
     select: {
       id: true,
       userId: true,
@@ -33,13 +48,26 @@ export default async function ConversationsInboxPage() {
   // Tri applicatif : la date du dernier message n'est pas une colonne du fil.
   const rows = conversations
     .map((c) => ({ ...c, last: c.messages[0] ?? null }))
-    .sort((a, b) => (b.last?.sentAt.getTime() ?? 0) - (a.last?.sentAt.getTime() ?? 0));
+    .sort((a, b) => (b.last?.sentAt.getTime() ?? 0) - (a.last?.sentAt.getTime() ?? 0))
+    .filter((c) => !onlyUnread || unread.has(c.id));
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Messages"
         description="Un fil par élève et par session. Les envois automatiques y figurent aussi."
+      />
+
+      <ListFilters
+        searchPlaceholder="Nom d'élève ou de session"
+        filters={[
+          {
+            key: "etat",
+            label: "État",
+            allLabel: "Tous les fils",
+            options: [{ value: "alire", label: "À lire" }],
+          },
+        ]}
       />
 
       {rows.length === 0 ? (

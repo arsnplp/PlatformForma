@@ -3,22 +3,34 @@ import { redirect } from "next/navigation";
 import { requireUser, hasPermission } from "@/lib/auth/session";
 import { canSupervise } from "@/lib/auth/ownership";
 import { listStudents } from "@/lib/queries/students";
-import { SESSION_STATUS } from "@/lib/labels";
+import { SESSION_STATUS, ENROLLMENT_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
+import { ListFilters } from "@/components/admin/list-filters";
+import { prisma } from "@/lib/prisma";
+import { ownerFilter } from "@/lib/auth/ownership";
 
 // Axe Élève (spec §10.1) : chaque élève mène à son dossier complet.
 export default async function StudentsPage({ searchParams }: PageProps<"/admin/eleves">) {
   const me = await requireUser("/admin/eleves");
   if (!hasPermission(me, "can_manage_sessions")) redirect("/admin");
-  const { q } = await searchParams;
-  const search = typeof q === "string" ? q : "";
-  const students = await listStudents(me, search);
+  const params = await searchParams;
+  const search = typeof params.q === "string" ? params.q : "";
+  const sessionId = typeof params.session === "string" ? params.session : "";
+  const status = typeof params.inscription === "string" ? params.inscription : "";
+
+  const [students, sessions] = await Promise.all([
+    listStudents(me, search, { sessionId, status }),
+    prisma.session.findMany({
+      where: { ...ownerFilter(me), enrollments: { some: {} } },
+      orderBy: { startDate: "desc" },
+      select: { id: true, name: true },
+      take: 100,
+    }),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -31,19 +43,27 @@ export default async function StudentsPage({ searchParams }: PageProps<"/admin/e
         }
       />
 
-      <form method="get" className="flex max-w-md gap-2">
-        <Input name="q" defaultValue={search} placeholder="Rechercher par nom ou email" aria-label="Rechercher" />
-        <Button type="submit" variant="outline">Rechercher</Button>
-        {search ? (
-          <Button asChild variant="ghost">
-            <Link href="/admin/eleves">Effacer</Link>
-          </Button>
-        ) : null}
-      </form>
+      <ListFilters
+        searchPlaceholder="Nom ou email d'un élève"
+        filters={[
+          {
+            key: "session",
+            label: "Session",
+            allLabel: "Toutes les sessions",
+            options: sessions.map((s) => ({ value: s.id, label: s.name })),
+          },
+          {
+            key: "inscription",
+            label: "Inscription",
+            allLabel: "Tous les statuts",
+            options: Object.entries(ENROLLMENT_STATUS).map(([key, value]) => ({ value: key, label: value.label })),
+          },
+        ]}
+      />
 
       {students.length === 0 ? (
-        <EmptyState title={search ? `Aucun élève pour « ${search} »` : "Aucun élève"}>
-          {!search ? "Inscris un élève depuis la fiche d'une session." : null}
+        <EmptyState title={search || sessionId || status ? "Aucun élève pour ces critères" : "Aucun élève"}>
+          {!search && !sessionId && !status ? "Inscris un élève depuis la fiche d'une session." : null}
         </EmptyState>
       ) : (
         <Table>
