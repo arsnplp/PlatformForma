@@ -7,6 +7,7 @@ import { getAccountState } from "@/lib/queries/account-state";
 import { ENROLLMENT_STATUS, SESSION_STATUS } from "@/lib/labels";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { ResendInvitation } from "@/components/admin/resend-invitation";
 import { DocumentList } from "@/components/documents/document-list";
@@ -39,7 +40,14 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
         breadcrumb={[{ label: "Élèves", href: "/admin/eleves" }]}
         title={student.name}
         description={student.email}
-        actions={<ResendInvitation userId={student.id} />}
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/api/exports?eleve=${student.id}`}>Dossier de preuve</Link>
+            </Button>
+            <ResendInvitation userId={student.id} />
+          </>
+        }
       />
 
       <p className="rounded-md bg-surface px-3 py-2 text-sm text-foreground-secondary">

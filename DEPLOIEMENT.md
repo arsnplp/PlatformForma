@@ -110,6 +110,17 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       `retention_until` en conséquence (obligations comptables et Qualiopi
       d'un côté, minimisation RGPD de l'autre).
 
+## Export du dossier de preuve (Palier 5)
+
+- [ ] **Surveiller la durée des gros exports** : l'archive est streamée, donc la
+      mémoire ne monte pas, mais un dossier de session volumineux tient la
+      requête ouverte le temps de copier chaque pièce. Vérifier le délai maximal
+      de l'hébergeur (proxy et fonction serveur) avant le premier export réel
+      d'une session complète.
+- [ ] Vérifier que les exports apparaissent bien dans l'`AccessLog`
+      (`export_dossier_eleve`, `export_dossier_session`) : qui a sorti quel
+      dossier, et quand.
+
 ## Invitation des élèves (Palier 4)
 
 - [ ] **Allonger la durée de validité des liens e-mail** dans Supabase

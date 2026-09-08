@@ -93,6 +93,9 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
                 </ConfirmButton>
               ) : null}
               <Button asChild variant="outline" size="sm">
+                <Link href={`/api/exports?session=${session.id}`}>Dossier de preuve</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
                 <Link href={`/admin/sessions/${session.id}/modifier`}>Modifier</Link>
               </Button>
               <ConfirmButton
