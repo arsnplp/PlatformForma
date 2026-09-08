@@ -21,6 +21,7 @@ import { ChecklistSection } from "@/components/sessions/checklist-section";
 import { ConversationsSection } from "@/components/sessions/conversations-section";
 import { SessionDocuments } from "@/components/documents/session-documents";
 import { AttendanceSection } from "@/components/attendance/attendance-section";
+import { ResultsSection } from "@/components/sessions/results-section";
 import { GeneratePlan } from "@/components/sessions/generate-plan";
 
 export default async function SessionPage({ params }: PageProps<"/admin/sessions/[id]">) {
@@ -148,6 +149,11 @@ export default async function SessionPage({ params }: PageProps<"/admin/sessions
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Checklist</h2>
         <ChecklistSection sessionId={session.id} frozenAt={frozenAt} sessionStatus={session.status} isDemoSession={session.isDemo} readOnly={isCancelled} />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Résultats</h2>
+        <ResultsSection sessionId={session.id} />
       </section>
 
       <section className="space-y-4">
