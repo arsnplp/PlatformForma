@@ -60,9 +60,14 @@ export async function buildTimeSheetPdf(params: {
     write(`Durée conventionnelle de la formation : ${report.session.durationHours} heures`, 9.5);
   }
 
-  if (report.session.isDemo) {
+  if (report.session.isDemo || report.simulated) {
     y -= 4;
-    write("DONNÉES DE DÉMONSTRATION — ce relevé n'a aucune valeur probante.", 10, bold, rgb(0.72, 0.35, 0.05));
+    write(
+      report.session.isDemo
+        ? "DONNÉES DE DÉMONSTRATION — ce relevé n'a aucune valeur probante."
+        : "CONTIENT DES DONNÉES SIMULÉES — ce relevé ne vaut pas preuve d'assiduité.",
+      10, bold, rgb(0.72, 0.35, 0.05),
+    );
   }
 
   y -= 10;
@@ -90,8 +95,10 @@ export async function buildTimeSheetPdf(params: {
 
   y -= 12;
   write(
-    "Temps mesuré par relevés de présence réguliers, hors périodes d'inactivité et onglet en arrière-plan.",
-    8.5, font, rgb(0.5, 0.5, 0.5),
+    report.simulated
+      ? "Ce relevé agrège des temps simulés depuis la plateforme : il ne rend pas compte d'une présence réelle."
+      : "Temps mesuré par relevés de présence réguliers, hors périodes d'inactivité et onglet en arrière-plan.",
+    8.5, font, report.simulated ? rgb(0.72, 0.35, 0.05) : rgb(0.5, 0.5, 0.5),
   );
   write(`Établi par ${params.generatedBy} le ${stampFmt.format(new Date())}.`, 8.5, font, rgb(0.5, 0.5, 0.5));
 

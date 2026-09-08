@@ -36,10 +36,17 @@ export async function StudentTime({
         <GenerateTimeSheet sessionId={sessionId} userId={userId} />
       </div>
 
-      {canGenerate && isDemo ? (
-        <div className="rounded-md bg-status-orange-bg/40 px-3 py-2">
-          <p className="text-xs font-medium text-status-orange">
-            Session de démonstration — activité fabriquée, sans valeur de mesure
+      {report.simulated ? (
+        <p className="rounded-md bg-status-orange-bg px-3 py-2 text-xs text-status-orange">
+          Ce total contient une activité simulée : le relevé le mentionne et ne vaut pas preuve d&apos;assiduité.
+        </p>
+      ) : null}
+
+      {canGenerate ? (
+        <div className="rounded-md border border-dashed px-3 py-2">
+          <p className="text-xs text-foreground-secondary">
+            Activité simulée {isDemo ? "(session de démonstration)" : ""} — remplace la précédente simulation,
+            jamais les connexions réelles.
           </p>
           <div className="mt-2">
             <StudentActivityTools sessionId={sessionId} userId={userId} />

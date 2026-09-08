@@ -9,7 +9,7 @@ export type DailyRow = { day: Date; seconds: number };
 export type ScopeRow = { label: string; seconds: number };
 
 export async function getStudentSessionTime(sessionId: string, userId: string) {
-  const [aggregates, session, modules] = await Promise.all([
+  const [aggregates, session, modules, simulated] = await Promise.all([
     prisma.timeAggregate.findMany({
       where: { sessionId, userId },
       orderBy: [{ day: "asc" }],
@@ -27,6 +27,9 @@ export async function getStudentSessionTime(sessionId: string, userId: string) {
       orderBy: { order: "asc" },
       select: { id: true, order: true, title: true, lessons: { orderBy: { order: "asc" }, select: { id: true, order: true, title: true } } },
     }),
+    // Des traces fabriquées entrent-elles dans ce total ? Un relevé doit
+    // pouvoir dire quand il n'est pas une mesure.
+    prisma.activityLog.count({ where: { sessionId, userId, isDemo: true } }),
   ]);
 
   const lessonTitle = new Map<string, string>();
@@ -59,6 +62,8 @@ export async function getStudentSessionTime(sessionId: string, userId: string) {
 
   return {
     session,
+    /// Le total inclut des traces fabriquées : le relevé le signale.
+    simulated: simulated > 0,
     days,
     modules: sum("module", moduleTitle),
     lessons: sum("lesson", lessonTitle),

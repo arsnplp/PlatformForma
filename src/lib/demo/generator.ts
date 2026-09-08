@@ -41,7 +41,6 @@ const pick = <T,>(rand: () => number, list: T[]): T => list[Math.floor(rand() * 
 export async function generateStudentActivity(params: {
   sessionId: string;
   userId: string;
-  isDemo: boolean;
 }): Promise<{ beats: number; submissions: number; days: number }> {
   const { sessionId, userId } = params;
 
@@ -73,10 +72,11 @@ export async function generateStudentActivity(params: {
   );
   if (lessons.length === 0) return { beats: 0, submissions: 0, days: 0 };
 
-  // On remplace : l'ancienne activité fabriquée disparaît avant la nouvelle.
+  // On remplace l'activité FABRIQUÉE, et elle seule : les traces réelles d'un
+  // élève sont du vécu, ce générateur n'y touche jamais.
   await prisma.$transaction([
     prisma.timeAggregate.deleteMany({ where: { sessionId, userId } }),
-    prisma.activityLog.deleteMany({ where: { sessionId, userId, eventType: "heartbeat" } }),
+    prisma.activityLog.deleteMany({ where: { sessionId, userId, eventType: "heartbeat", isDemo: true } }),
   ]);
 
   // Jours de travail : quelques journées dans la fenêtre de la session, jamais
@@ -117,7 +117,9 @@ export async function generateStudentActivity(params: {
         at.setUTCHours(startHour, 0, 0, 0);
         logs.push({
           userId, sessionId, moduleId: lesson.moduleId, lessonId: lesson.id,
-          eventType: "heartbeat", durationSeconds: HEARTBEAT_SECONDS, isDemo: session.isDemo,
+          // isDemo marque la trace comme fabriquée. C'est ce qui permet, plus
+          // loin, de ne jamais présenter un temps simulé comme une mesure.
+          eventType: "heartbeat", durationSeconds: HEARTBEAT_SECONDS, isDemo: true,
           at: new Date(at.getTime() + b * HEARTBEAT_SECONDS * 1000),
         });
       }
@@ -140,7 +142,7 @@ export async function generateStudentActivity(params: {
     await prisma.submission.create({
       data: {
         exerciseId: exercise.id, userId, sessionId,
-        status: "graded", autoScore: score, isDemo: session.isDemo,
+        status: "graded", autoScore: score, isDemo: true,
         content: { kind: "generated", note: "Réponse de démonstration" },
         submittedAt: days[Math.floor(rand() * days.length)] ?? new Date(),
         gradedAt: new Date(),

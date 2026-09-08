@@ -141,7 +141,7 @@ export async function generateDemoSession(): Promise<DemoState> {
   }
 
   for (const userId of students) {
-    await generateStudentActivity({ sessionId: session.id, userId, isDemo: true });
+    await generateStudentActivity({ sessionId: session.id, userId });
     await rebuildTimeAggregates(session.id, userId);
   }
 
@@ -153,22 +153,19 @@ export async function generateDemoSession(): Promise<DemoState> {
   };
 }
 
-// Activité d'UN élève, régénérable à volonté. Refusée hors démonstration :
-// un relevé de temps est présenté comme une mesure, pas comme une simulation.
+// Activité d'UN élève, régénérable à volonté, sur n'importe quelle session.
+//
+// Les traces produites restent marquées comme fabriquées : le relevé de temps
+// est une mesure, et il doit pouvoir dire quand il n'en est pas une. Cette
+// marque ne se voit qu'à l'endroit qui compte — le relevé et l'écran d'analyse
+// — et n'entrave rien d'autre.
 export async function generateActivityFor(sessionId: string, userId: string): Promise<DemoState> {
   await requirePermission("can_generate_demo_data");
 
   const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { isDemo: true, name: true } });
   if (!session) return { ok: false, message: "Session introuvable." };
-  if (!session.isDemo) {
-    return {
-      ok: false,
-      message:
-        "Session réelle : l'activité ne se fabrique pas. Le relevé de temps est présenté comme une mesure et sert de preuve d'assiduité — utilise une session de démonstration.",
-    };
-  }
 
-  const result = await generateStudentActivity({ sessionId, userId, isDemo: true });
+  const result = await generateStudentActivity({ sessionId, userId });
   await rebuildTimeAggregates(sessionId, userId);
 
   revalidatePath(`/admin/eleves/${userId}`);
@@ -184,14 +181,15 @@ export async function clearActivityFor(sessionId: string, userId: string): Promi
   await requirePermission("can_generate_demo_data");
   const session = await prisma.session.findUnique({ where: { id: sessionId }, select: { isDemo: true } });
   if (!session) return { ok: false, message: "Session introuvable." };
-  if (!session.isDemo) return { ok: false, message: "Session réelle : ses traces d'activité ne s'effacent pas." };
 
+  // Seules les traces fabriquées s'effacent : une connexion réelle est du vécu.
   const [, logs] = await prisma.$transaction([
     prisma.timeAggregate.deleteMany({ where: { sessionId, userId } }),
-    prisma.activityLog.deleteMany({ where: { sessionId, userId } }),
+    prisma.activityLog.deleteMany({ where: { sessionId, userId, isDemo: true } }),
   ]);
+  await rebuildTimeAggregates(sessionId, userId);
   revalidatePath(`/admin/eleves/${userId}`);
-  return { ok: true, message: `${logs.count} trace(s) effacée(s).` };
+  return { ok: true, message: `${logs.count} trace(s) fabriquée(s) effacée(s).` };
 }
 
 // Purge : tout ce qui porte la marque de démonstration disparaît. Les
