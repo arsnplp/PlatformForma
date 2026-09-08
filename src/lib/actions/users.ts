@@ -86,12 +86,25 @@ export async function createTrainer(_prev: AccountState, formData: FormData): Pr
 
 // ── Élève ──────────────────────────────────────────────────────────────────
 
+// Une entreprise absente de la liste se crée ici, avec les MÊMES champs que
+// sa fiche : une entreprise n'est pas qu'un nom, et une fiche créée à moitié
+// devrait être complétée plus tard — donc jamais.
+const newCompanySchema = z.object({
+  name: z.string().trim().min(1, "Nom de l'entreprise requis"),
+  siret: z.preprocess(emptyToNull, z.string().regex(/^\d{14}$/, "Le SIRET comporte 14 chiffres").nullable()),
+  sector: z.preprocess(emptyToNull, z.string().trim().nullable()),
+  contactName: z.preprocess(emptyToNull, z.string().trim().nullable()),
+  contactEmail: z.preprocess(emptyToNull, z.string().trim().email("Email de contact invalide").nullable()),
+  contactPhone: z.preprocess(emptyToNull, z.string().trim().nullable()),
+  address: z.preprocess(emptyToNull, z.string().trim().nullable()),
+});
+
 const studentSchema = z.object({
   name: z.string().trim().min(1, "Nom requis"),
   email: z.string().trim().toLowerCase().email("Email invalide"),
   companyId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
-  // Entreprise absente de la liste : on la crée dans la foulée.
-  newCompanyName: z.preprocess(emptyToNull, z.string().trim().nullable()),
+  /// « existante », « nouvelle » ou vide (à titre personnel).
+  companyMode: z.preprocess(emptyToNull, z.string().nullable()),
 });
 
 // Créer un élève depuis la liste des élèves, sans passer par une session.
@@ -100,11 +113,18 @@ export async function createStudent(_prev: AccountState, formData: FormData): Pr
   const me = await requirePermission("can_manage_sessions");
   const parsed = parseForm(studentSchema, formData);
   if (!parsed.ok) return parsed.state;
-  const { name, email, companyId, newCompanyName } = parsed.data;
+  const { name, email, companyId, companyMode } = parsed.data;
 
   let company = companyId;
-  if (newCompanyName) {
-    const created = await prisma.company.create({ data: { ownerId: me.id, name: newCompanyName } });
+  if (companyMode === "nouvelle") {
+    const parsedCompany = parseForm(newCompanySchema, formData, "company_");
+    if (!parsedCompany.ok) return parsedCompany.state;
+
+    if (parsedCompany.data.siret) {
+      const existing = await prisma.company.findUnique({ where: { siret: parsedCompany.data.siret } });
+      if (existing) return fieldError(formData, "company_siret", "Ce SIRET existe déjà");
+    }
+    const created = await prisma.company.create({ data: { ...parsedCompany.data, ownerId: me.id } });
     company = created.id;
   } else if (company) {
     // Une entreprise hors de mon périmètre n'existe pas pour moi.

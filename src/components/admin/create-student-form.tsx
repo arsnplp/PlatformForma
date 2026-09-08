@@ -56,25 +56,51 @@ export function CreateStudentForm({ companies }: { companies: { id: string; name
         </div>
 
         <FormField id="s-company" label="Entreprise" errors={e.companyId}>
-          <NativeSelect
-            id="s-company"
-            name="companyId"
-            value={choice === "__new__" ? "" : choice}
-            onChange={(event) => setChoice(event.target.value)}
-          >
+          <NativeSelect id="s-company" value={choice} onChange={(event) => setChoice(event.target.value)}>
             <option value="">À titre personnel (sans entreprise)</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
+            <option value="__new__">＋ Créer une nouvelle entreprise…</option>
           </NativeSelect>
         </FormField>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[16rem] flex-1 text-xs text-foreground-secondary">
-            Ou saisis une entreprise absente de la liste : elle sera créée
-            <Input name="newCompanyName" placeholder="Nom de l'entreprise" className="mt-1" />
-          </label>
-        </div>
+        {/* La valeur envoyée dépend du choix : une entreprise existante, ou
+            les champs complets d'une nouvelle. Une entreprise n'est pas
+            qu'un nom, on ne crée donc pas de fiche au rabais. */}
+        <input type="hidden" name="companyMode" value={choice === "__new__" ? "nouvelle" : choice ? "existante" : ""} />
+        <input type="hidden" name="companyId" value={choice === "__new__" ? "" : choice} />
+
+        {choice === "__new__" ? (
+          <div className="space-y-4 rounded-md border bg-surface/50 p-4">
+            <p className="text-sm font-medium">Nouvelle entreprise</p>
+            <FormField id="c-name" label="Nom" errors={e.company_name}>
+              <Input id="c-name" name="company_name" defaultValue={v("company_name")} placeholder="Nettoyage Pro Services" required />
+            </FormField>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField id="c-siret" label="SIRET" hint="14 chiffres" errors={e.company_siret}>
+                <Input id="c-siret" name="company_siret" inputMode="numeric" defaultValue={v("company_siret")} />
+              </FormField>
+              <FormField id="c-sector" label="Secteur" errors={e.company_sector}>
+                <Input id="c-sector" name="company_sector" defaultValue={v("company_sector")} placeholder="BTP, santé, propreté…" />
+              </FormField>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField id="c-contact" label="Contact" errors={e.company_contactName}>
+                <Input id="c-contact" name="company_contactName" defaultValue={v("company_contactName")} />
+              </FormField>
+              <FormField id="c-phone" label="Téléphone" errors={e.company_contactPhone}>
+                <Input id="c-phone" name="company_contactPhone" type="tel" defaultValue={v("company_contactPhone")} />
+              </FormField>
+            </div>
+            <FormField id="c-email" label="Email du contact" hint="Sert aux conventions à signer" errors={e.company_contactEmail}>
+              <Input id="c-email" name="company_contactEmail" type="email" defaultValue={v("company_contactEmail")} />
+            </FormField>
+            <FormField id="c-address" label="Adresse" errors={e.company_address}>
+              <Input id="c-address" name="company_address" defaultValue={v("company_address")} />
+            </FormField>
+          </div>
+        ) : null}
 
         <div className="flex gap-2">
           <SubmitButton pendingLabel="Création…">Créer et inviter</SubmitButton>

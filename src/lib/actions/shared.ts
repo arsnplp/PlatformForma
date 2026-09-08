@@ -8,22 +8,29 @@ export type FormState =
   | undefined;
 
 // Parse un FormData avec un schéma zod ; renvoie soit les données, soit un FormState d'erreur.
-export function parseForm<T>(schema: ZodType<T>, formData: FormData):
+// `prefix` permet de valider un second objet dans le même formulaire : les
+// champs « company_nom », « company_siret »… sont lus comme « nom », « siret »,
+// et les erreurs ressortent avec leur préfixe pour retrouver le bon champ.
+export function parseForm<T>(schema: ZodType<T>, formData: FormData, prefix = ""):
   | { ok: true; data: T }
   | { ok: false; state: FormState } {
   const raw: Record<string, string> = {};
+  const all: Record<string, string> = {};
   formData.forEach((value, key) => {
     if (key.startsWith("$ACTION")) return;
-    if (typeof value === "string") raw[key] = value;
+    if (typeof value !== "string") return;
+    all[key] = value;
+    if (!prefix) raw[key] = value;
+    else if (key.startsWith(prefix)) raw[key.slice(prefix.length)] = value;
   });
   const result = schema.safeParse(raw);
   if (result.success) return { ok: true, data: result.data };
   const fieldErrors: Record<string, string[]> = {};
   for (const issue of result.error.issues) {
-    const key = String(issue.path[0] ?? "_");
+    const key = prefix + String(issue.path[0] ?? "_");
     (fieldErrors[key] ??= []).push(issue.message);
   }
-  return { ok: false, state: { error: "Vérifie les champs en erreur.", fieldErrors, values: raw } };
+  return { ok: false, state: { error: "Vérifie les champs en erreur.", fieldErrors, values: all } };
 }
 
 // Construit un FormState d'erreur sur un champ précis, en conservant les valeurs saisies.
