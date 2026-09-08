@@ -7,6 +7,8 @@ import { StudentExercises } from "@/components/content/student-exercises";
 import { readText } from "@/lib/content/block-payload";
 import { prisma } from "@/lib/prisma";
 import { currentTime } from "@/lib/now";
+import { TimeTracker } from "@/components/content/time-tracker";
+import { getMyLessonSeconds } from "@/lib/actions/activity";
 
 // Lecture d'une leçon : exactement le rendu de l'éditeur (spec §3.2).
 export default async function StudentLessonPage({ params }: PageProps<"/espace/sessions/[sessionId]/lecons/[lessonId]">) {
@@ -50,6 +52,9 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
     ]),
   );
 
+  // Temps déjà cumulé, pour repartir du bon compteur à chaque ouverture.
+  const secondsSoFar = access.role === "student" ? await getMyLessonSeconds(sessionId, lesson.id) : 0;
+
   return (
     <div className="space-y-8">
       {access.role === "preview" ? (
@@ -67,6 +72,10 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{lesson.title}</h1>
       </div>
+
+      {access.role === "student" ? (
+        <TimeTracker sessionId={sessionId} lessonId={lesson.id} initialSeconds={secondsSoFar} />
+      ) : null}
 
       <article className="space-y-1">
         {blocks.length === 0 ? (
