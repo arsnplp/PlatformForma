@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { requestDocumentUpload, createDocument, type DocumentTarget } from "@/lib/actions/documents";
 import { MAX_FILE_BYTES, DOCUMENT_TYPES as MIME_TYPES, formatBytes } from "@/lib/storage/config";
@@ -9,6 +9,7 @@ import type { DocumentType } from "@/generated/prisma/enums";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/admin/native-select";
 import { FormField } from "@/components/admin/form-field";
+import { cn } from "@/lib/utils";
 
 // Dépôt d'une pièce au dossier : envoi direct vers le stockage privé, puis
 // enregistrement. Le titulaire (élève ou entreprise) est fixé par l'appelant,
@@ -30,6 +31,8 @@ export function DocumentUpload({
   const [title, setTitle] = useState("");
   const [sessionId, setSessionId] = useState(sessions?.[0]?.id ?? target.sessionId ?? null);
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const inputId = useId();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -98,20 +101,43 @@ export function DocumentUpload({
         </FormField>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Deux façons de déposer : glisser le fichier, ou cliquer pour l'ouvrir
+          depuis le disque. Le glisser-déposer évite le sélecteur du système,
+          qui reste bloqué dans certains navigateurs (fenêtre automatisée). */}
+      <label
+        htmlFor={inputId}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) upload(file);
+        }}
+        className={cn(
+          "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-6 text-center transition-colors",
+          dragging ? "border-brand bg-brand-soft" : "hover:bg-surface",
+          busy && "pointer-events-none opacity-60",
+        )}
+      >
+        <span className="text-sm font-medium">
+          {busy ? "Envoi en cours…" : "Glisse un fichier ici, ou clique pour le choisir"}
+        </span>
+        <span className="text-xs text-foreground-tertiary">
+          PDF, images, bureautique et texte · {formatBytes(MAX_FILE_BYTES)} maximum
+        </span>
         <input
+          id={inputId}
           type="file"
           accept={MIME_TYPES.join(",")}
           disabled={busy}
           onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }}
-          className="text-sm file:mr-3 file:rounded-md file:border file:bg-background file:px-3 file:py-1.5 file:text-sm"
+          className="sr-only"
         />
-        {busy ? <span className="text-sm text-foreground-secondary">Envoi…</span> : null}
-      </div>
+      </label>
 
       <p className="text-xs text-foreground-tertiary">
-        PDF, images et bureautique · {formatBytes(MAX_FILE_BYTES)} maximum. La pièce n&apos;est jamais publique :
-        chaque ouverture passe par un lien signé de courte durée.
+        La pièce n&apos;est jamais publique : chaque ouverture passe par un lien signé de courte durée.
       </p>
 
       {error ? <p className="text-sm text-status-red">{error}</p> : null}

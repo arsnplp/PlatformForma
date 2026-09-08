@@ -26,8 +26,6 @@ const BOTH_NOTE = "Propriétaire + assistant(e) (ex. Fatima).";
 export const DEFAULT_PROCESS_NAME = "Process standard (7 phases + suivi)";
 
 export const DEFAULT_PROCESS: DefaultStep[] = [
-  // Phase 0
-  { phase: 0, name: "Premier call effectué + fiche prospect créée", assignee: "proprio+assistant", trigger: "manual" },
   // Phase 1
   { phase: 1, name: "Catalogue + Programme + Devis + RI + Questionnaire envoyés", assignee: "proprio+assistant", trigger: "manual" },
   // Phase 2

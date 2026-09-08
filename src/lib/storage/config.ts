@@ -74,14 +74,26 @@ export function safeFileName(name: string): string {
 export const DOCUMENT_TYPES: readonly string[] = [
   ...ALLOWED_TYPES.pdf,
   ...ALLOWED_TYPES.image,
+  // Photos prises depuis un iPhone : le format par défaut d'iOS.
+  "image/heic",
+  "image/heif",
+  "text/plain",
+  "text/csv",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.oasis.opendocument.text",
   "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
 ];
 
 export function isAllowedDocumentType(mimeType: string): boolean {
+  // Certains navigateurs ne devinent pas le type d'un fichier : plutôt que de
+  // refuser un dépôt légitime, on laisse passer et c'est l'extension du nom
+  // qui fera foi à l'ouverture.
+  if (!mimeType) return true;
   return DOCUMENT_TYPES.includes(mimeType);
 }
