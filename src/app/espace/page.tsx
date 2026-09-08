@@ -7,13 +7,19 @@ import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { UnreadBadge } from "@/components/admin/unread-badge";
 import { unreadBySession } from "@/lib/queries/conversations";
+import { countWaitingSlots } from "@/lib/queries/slots";
 
 // « Mes formations » : une carte par inscription (spec §11).
 export default async function EspacePage() {
   const me = await requireUser("/espace");
   const enrollments = await listMyEnrollments(me.id);
   // Une pastille sur la formation dont le fil attend une lecture.
-  const unread = await unreadBySession(me.id, enrollments.map((e) => e.session.id));
+  const sessionIds = enrollments.map((e) => e.session.id);
+  const unread = await unreadBySession(me.id, sessionIds);
+  // Pièces à fournir ou à signer : elles comptent autant qu'un message non lu.
+  const waiting = new Map(
+    await Promise.all(sessionIds.map(async (id) => [id, await countWaitingSlots({ sessionId: id, userId: me.id })] as const)),
+  );
 
   return (
     <div className="space-y-8">
@@ -48,7 +54,7 @@ export default async function EspacePage() {
                     <div className="min-w-0">
                       <p className="flex items-center gap-2 font-medium">
                         {fv.formation.name}
-                        <UnreadBadge count={unread.get(s.id) ?? 0} />
+                        <UnreadBadge count={(unread.get(s.id) ?? 0) + (waiting.get(s.id) ?? 0)} />
                       </p>
                       <p className="mt-0.5 text-sm text-foreground-secondary">
                         {s.name}

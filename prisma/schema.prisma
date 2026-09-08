@@ -165,6 +165,14 @@ enum AttendanceStatus {
   unsigned
 }
 
+/// Nature d'un emplacement de pièce (« carré ») dans l'espace commun.
+enum DocumentSlotKind {
+  /// Le titulaire doit déposer la pièce : le carré est vide en attendant.
+  to_provide
+  /// Le formateur pose la pièce, le titulaire doit la signer.
+  to_sign
+}
+
 enum SubmissionStatus {
   submitted
   graded
@@ -225,6 +233,10 @@ model User {
   submissionsGraded        Submission[]       @relation("SubmissionGrader")
   activityLogs             ActivityLog[]
   timeAggregates           TimeAggregate[]
+  documentSlots            DocumentSlot[]         @relation("DocumentSlotHolder")
+  documentSlotsCreated     DocumentSlot[]         @relation("DocumentSlotAuthor")
+  slotTemplates            DocumentSlotTemplate[] @relation("SlotTemplateOwner")
+  slotGroups               DocumentSlotGroup[]    @relation("SlotGroupOwner")
 
   @@map("users")
 }
@@ -316,10 +328,11 @@ model Company {
 
   owner User @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
 
-  prospects Prospect[]
-  members   User[]     @relation("CompanyMembers")
-  sessions  Session[]
-  documents Document[]
+  prospects     Prospect[]
+  members       User[]         @relation("CompanyMembers")
+  sessions      Session[]
+  documents     Document[]
+  documentSlots DocumentSlot[]
 
   @@index([ownerId])
   @@map("companies")
@@ -560,6 +573,7 @@ model Session {
   activityLogs   ActivityLog[]
   timeAggregates TimeAggregate[]
   executions     StepExecution[]
+  documentSlots  DocumentSlot[]
 
   @@index([ownerId])
   @@index([formationVersionId])
@@ -750,6 +764,7 @@ model Document {
 
   attendances  Attendance[]
   activityLogs ActivityLog[]
+  slot         DocumentSlot?
 
   @@index([ownerUserId])
   @@index([sessionId])
@@ -882,6 +897,108 @@ model Submission {
   @@index([exerciseId])
   @@index([status])
   @@map("submissions")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ESPACE COMMUN — emplacements de pièces (« carrés »)
+//
+// Un emplacement dit CE QU'ON ATTEND : une pièce à fournir, ou une pièce à
+// signer. Il se remplit à deux, formateur et titulaire, et son état se LIT
+// plutôt qu'il ne se stocke — vide, rempli, signé — pour qu'aucun statut ne
+// puisse diverger de la réalité des pièces.
+//
+// Le titulaire est un élève (sur une session) ou une entreprise, jamais les
+// deux : contrainte `document_slots_holder_check`.
+// ═════════════════════════════════════════════════════════════════════════════
+
+model DocumentSlot {
+  id           String           @id @default(uuid()) @db.Uuid
+  kind         DocumentSlotKind
+  title        String
+  /// Ce que le titulaire doit comprendre : format attendu, précisions.
+  instructions String?
+  /// Classement de la pièce attendue : c'est lui qui range l'export ZIP.
+  documentType DocumentType     @default(autre) @map("document_type")
+  phase        Int?
+  dueDate      DateTime?        @map("due_date") @db.Date
+  order        Int              @default(0)
+
+  /// Titulaire élève : la session donne le contexte du dossier.
+  userId    String? @map("user_id") @db.Uuid
+  sessionId String? @map("session_id") @db.Uuid
+  /// Titulaire entreprise (conventions, factures) : pas de session.
+  companyId String? @map("company_id") @db.Uuid
+
+  /// La pièce qui remplit l'emplacement, quand elle existe.
+  documentId String? @unique @map("document_id") @db.Uuid
+
+  createdById String?   @map("created_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  /// Retrait d'une demande devenue sans objet. Jamais de suppression physique.
+  archivedAt  DateTime? @map("archived_at")
+
+  user      User?     @relation("DocumentSlotHolder", fields: [userId], references: [id], onDelete: Restrict)
+  session   Session?  @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  document  Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  createdBy User?     @relation("DocumentSlotAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([userId, sessionId])
+  @@index([companyId])
+  @@map("document_slots")
+}
+
+/// Modèle de carré, réutilisable d'un dossier à l'autre (« Carte d'identité »).
+model DocumentSlotTemplate {
+  id           String           @id @default(uuid()) @db.Uuid
+  ownerId      String           @map("owner_id") @db.Uuid
+  kind         DocumentSlotKind
+  title        String
+  instructions String?
+  documentType DocumentType     @default(autre) @map("document_type")
+  phase        Int?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  archivedAt   DateTime?        @map("archived_at")
+
+  owner User @relation("SlotTemplateOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+
+  groupItems DocumentSlotGroupItem[]
+
+  @@index([ownerId])
+  @@map("document_slot_templates")
+}
+
+/// Groupe de modèles, pour poser tout un dossier d'un coup
+/// (« Dossier d'inscription OPCO » = 4 carrés).
+model DocumentSlotGroup {
+  id         String    @id @default(uuid()) @db.Uuid
+  ownerId    String    @map("owner_id") @db.Uuid
+  name       String
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+
+  owner User                    @relation("SlotGroupOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  items DocumentSlotGroupItem[]
+
+  @@index([ownerId])
+  @@map("document_slot_groups")
+}
+
+model DocumentSlotGroupItem {
+  id         String @id @default(uuid()) @db.Uuid
+  groupId    String @map("group_id") @db.Uuid
+  templateId String @map("template_id") @db.Uuid
+  order      Int
+
+  group    DocumentSlotGroup    @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  template DocumentSlotTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  @@unique([groupId, order])
+  @@index([templateId])
+  @@map("document_slot_group_items")
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

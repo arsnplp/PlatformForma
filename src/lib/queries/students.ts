@@ -85,7 +85,9 @@ export async function getStudentDossier(id: string, me: CurrentUser) {
       },
       documentsOwned: {
         orderBy: { createdAt: "desc" },
-        include: { session: { select: { id: true, name: true } } },
+        // `slot` dit si la pièce vient de l'espace commun : elle s'affiche
+        // alors dans son carré, pas une deuxième fois dans la liste.
+        include: { session: { select: { id: true, name: true } }, slot: { select: { id: true } } },
       },
       attendances: { orderBy: [{ day: "asc" }, { slot: "asc" }], include: { session: { select: { id: true, name: true } } } },
       submissions: {

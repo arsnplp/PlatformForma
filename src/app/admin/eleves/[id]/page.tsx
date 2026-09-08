@@ -14,6 +14,9 @@ import { StudentTime } from "@/components/admin/student-time";
 import { StudentCompany } from "@/components/admin/student-company";
 import { DocumentList } from "@/components/documents/document-list";
 import { DocumentUpload } from "@/components/documents/document-upload";
+import { SlotGrid } from "@/components/documents/slot-grid";
+import { SlotCreate } from "@/components/documents/slot-create";
+import { listStudentSlots } from "@/lib/queries/slots";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -33,6 +36,12 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
 
   const account = await getAccountState(student.id);
 
+  // Emplacements de l'espace commun, une session à la fois.
+  const slotsBySession = new Map(
+    await Promise.all(
+      student.enrollments.map(async (e) => [e.session.id, await listStudentSlots(e.session.id, student.id)] as const),
+    ),
+  );
   const signed = student.documentsOwned.filter((d) => d.signatureStatus === "signed").length;
   const pending = student.documentsOwned.filter((d) => d.signatureStatus === "pending").length;
 
@@ -161,13 +170,49 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
         )}
       </section>
 
-      {/* ─── Documents & signatures ─────────────────────────────────────── */}
+      {/* ─── Espace commun : ce qui se remplit à deux ───────────────────── */}
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Documents et signatures</h2>
+        <div>
+          <h2 className="text-xl font-semibold">Espace commun — ce que j&apos;attends de l&apos;élève</h2>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            Un emplacement par pièce attendue. Point rouge : la balle est dans son camp.
+          </p>
+        </div>
+        {student.enrollments.length === 0 ? (
+          <p className="text-sm text-foreground-tertiary">
+            Inscris-le d&apos;abord à une session : une demande se rattache toujours à un dossier.
+          </p>
+        ) : (
+          student.enrollments.map((e) => (
+            <div key={e.id} className="space-y-3">
+              {student.enrollments.length > 1 ? (
+                <p className="text-sm font-medium text-foreground-secondary">{e.session.name}</p>
+              ) : null}
+              <SlotGrid
+                slots={slotsBySession.get(e.session.id) ?? []}
+                role="staff"
+                emptyLabel="Aucune demande en cours pour cette session."
+              />
+              <SlotCreate holder={{ userId: student.id, sessionId: e.session.id }} />
+            </div>
+          ))
+        )}
+      </section>
+
+      {/* ─── Pièces que le formateur dépose seul ────────────────────────── */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold">Pièces que je dépose au dossier</h2>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            Convention, convocation, attestation : ce que je classe sans rien attendre de lui.
+          </p>
+        </div>
         <DocumentList
           manageable
-          documents={student.documentsOwned.map((d) => ({ ...d, holder: d.session?.name ?? null }))}
-          emptyLabel="Aucune pièce au dossier de cet élève"
+          documents={student.documentsOwned
+            .filter((d) => !d.slot)
+            .map((d) => ({ ...d, holder: d.session?.name ?? null }))}
+          emptyLabel="Aucune pièce déposée directement"
         />
         {student.enrollments.length > 0 ? (
           <DocumentUpload
@@ -175,11 +220,7 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
             target={{ ownerUserId: student.id }}
             sessions={student.enrollments.map((e) => ({ id: e.session.id, name: e.session.name }))}
           />
-        ) : (
-          <p className="text-sm text-foreground-tertiary">
-            Une pièce d&apos;élève se rattache toujours à une session : inscris-le d&apos;abord à une session.
-          </p>
-        )}
+        ) : null}
       </section>
 
       {/* ─── Émargements ────────────────────────────────────────────────── */}

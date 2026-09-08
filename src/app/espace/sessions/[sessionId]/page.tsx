@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { BlockView } from "@/components/content/block-view";
 import { UnreadBadge } from "@/components/admin/unread-badge";
 import { unreadBySession } from "@/lib/queries/conversations";
+import { countWaitingSlots } from "@/lib/queries/slots";
 
 // Programme d'une session : l'arbre figé de sa version (spec §11).
 export default async function SessionProgramPage({ params }: PageProps<"/espace/sessions/[sessionId]">) {
@@ -24,6 +25,7 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
   const lessons = fv.modules.reduce((n, m) => n + m.lessons.length, 0);
   const firstLesson = fv.modules.flatMap((m) => m.lessons)[0] ?? null;
   const unread = (await unreadBySession(me.id, [sessionId])).get(sessionId) ?? 0;
+  const waiting = access.role === "student" ? await countWaitingSlots({ sessionId, userId: me.id }) : 0;
 
   return (
     <div className="space-y-8">
@@ -55,8 +57,12 @@ export default async function SessionProgramPage({ params }: PageProps<"/espace/
           <Link href={`/espace/sessions/${sessionId}/plan`} className="font-medium text-brand hover:underline">
             Plan de formation →
           </Link>
-          <Link href={`/espace/sessions/${sessionId}/documents`} className="font-medium text-brand hover:underline">
+          <Link
+            href={`/espace/sessions/${sessionId}/documents`}
+            className="flex items-center gap-1.5 font-medium text-brand hover:underline"
+          >
             Mes documents →
+            <UnreadBadge count={waiting} />
           </Link>
         </p>
         <p className="mt-3 text-sm text-foreground-tertiary">
