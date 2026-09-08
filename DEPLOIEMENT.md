@@ -148,6 +148,21 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       `ALTER TABLE public.attendances DISABLE TRIGGER attendances_immutable;`
       puis le réactiver. Le geste doit rester conscient et tracé.
 
+## Relevés de temps et activité simulée
+
+- [ ] **Rétablir la mention « contient des données simulées » sur le relevé PDF**
+      avant que ces relevés ne sortent de la plateforme — remis à un élève,
+      joint à un dossier, transmis à un financeur ou à un auditeur.
+      Aujourd'hui la part simulée se lit uniquement dans l'application, sur la
+      fiche de l'élève, et seulement par un super-administrateur : le PDF, lui,
+      ne distingue pas les heures mesurées des heures fabriquées.
+      Un seul endroit à modifier : `src/lib/export/time-sheet-pdf.ts`, le bloc
+      qui teste `report.session.isDemo` (le champ `report.simulated` est déjà
+      calculé et disponible).
+- [ ] Décider si le générateur d'activité doit rester accessible une fois la
+      plateforme ouverte à d'autres formateurs. Il est réservé à
+      `can_generate_demo_data`, que seul le super-administrateur possède.
+
 ## Conformité
 
 - [ ] Renseigner la **durée en heures** sur chaque session : mention obligatoire
