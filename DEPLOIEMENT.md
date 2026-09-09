@@ -8,12 +8,13 @@ service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
 
 ## Envoi de mails (Palier 3)
 
-- [ ] **Vérifier le domaine `plateforma.nairox.fr` chez Resend** (configuration DNS en cours).
-      Ajouter les enregistrements SPF, DKIM et le domaine de retour fournis par Resend.
-      Tant que ce n'est pas fait, Resend n'accepte d'envoyer que vers l'adresse
-      du propriétaire du compte (`arsene.lecoq8@gmail.com`).
-- [ ] **Changer `MAIL_FROM`** pour une adresse du domaine vérifié
-      (ex. `Nairox Formation <contact@plateforma.nairox.fr>`), au lieu de `onboarding@resend.dev`.
+- [x] **Domaine `plateforma.nairox.fr` vérifié chez Resend** (statut `verified`,
+      région `eu-west-1`, contrôlé le 9 septembre 2026 par l'API Resend).
+      Un envoi réel depuis `contact@plateforma.nairox.fr` a été accepté.
+- [x] **`MAIL_FROM` sur le domaine vérifié** :
+      `Plateforme de formation <contact@plateforma.nairox.fr>`.
+      Attention : cette boîte n'existe pas côté réception — une réponse d'élève
+      se perdrait. Créer l'alias, ou passer à `no-reply@` pour être explicite.
 - [ ] **Passer `MAIL_MODE` à `production`**, seulement une fois le domaine vérifié
       ET les envois validés en bac à sable. C'est le geste qui ouvre les vannes :
       à partir de là, les mails partent réellement aux élèves.
@@ -21,6 +22,23 @@ service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
         avec de vraies dates et une vraie durée en heures.
 - [ ] **`MAIL_SANDBOX_TO`** : garder une adresse valide même en production, elle
       redevient le filet de sécurité si l'on repasse en bac à sable.
+
+## Bascules effectuées le 9 septembre 2026
+
+Mise en ligne sur `https://plateforma.nairox.fr` (VPS, conteneur Docker).
+
+- `MAIL_MODE=production` — les mails partent réellement aux élèves. Vérifié en
+  amont : domaine `verified` chez Resend, envoi de contrôle accepté.
+- `SIGNATURE_MODE=production` — les signatures engagent juridiquement. Vérifié
+  en amont : compte SignWell en plan `business`,
+  `can_create_completion_document: true`.
+
+Ces deux variables sont lues au démarrage du serveur : les changer demande
+`docker compose up -d --force-recreate`, jamais une reconstruction d'image
+(contrairement aux `NEXT_PUBLIC_*`).
+
+Pour revenir en arrière, remettre `sandbox` / `test` et recréer le conteneur —
+`MAIL_SANDBOX_TO` est conservée pour cette raison.
 
 ## Tâches planifiées (Palier 3)
 
@@ -44,8 +62,8 @@ service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
 
 ## Fichiers et stockage (Palier 4)
 
-- [ ] **Créer le bucket privé `content`** sur le projet Supabase de production
-      (il l'est déjà en développement). Il doit rester **non public** : chaque
+- [x] **Bucket privé `content`** — présent et non public (vérifié le 9 septembre
+      2026, comme `submissions`, `documents` et `messages`). Chaque
       lecture passe par `/api/fichiers/[blockId]`, qui vérifie les droits puis
       délivre une URL signée de 60 secondes.
       Vérification : dans Supabase, Storage → `content` → le bucket ne doit pas
@@ -75,11 +93,10 @@ service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
 
 ## Application
 
-- [ ] **Définir `NEXT_PUBLIC_APP_URL`** avec l'URL publique (ex. `https://plateforma.nairox.fr`).
-      Sans elle, la variable `{{lien_espace_eleve}}` des mails du process pointe
-      vers `http://localhost:3000/espace` : les élèves recevraient un lien
-      inutilisable. **À faire avant tout envoi réel.**
-- [ ] Appliquer les migrations Prisma sur la base de production (`prisma migrate deploy`).
+- [x] **`NEXT_PUBLIC_APP_URL` = `https://plateforma.nairox.fr`**, inscrite à la
+      compilation de l'image (voir `DEPLOIEMENT-VPS.md`). La changer impose de
+      reconstruire l'image, pas seulement de redémarrer le conteneur.
+- [x] Migrations Prisma appliquées (`No pending migrations to apply`, 19 migrations).
 - [ ] Lancer le seed des rôles et permissions, et créer le compte super-administrateur.
 - [ ] Vérifier que les policies RLS sont bien actives sur la base de production
       (27 tables, voir la migration `rls_auth_sync`).
@@ -93,7 +110,7 @@ service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
       `MAIL_SANDBOX_TO`.
 - [ ] **Vérifier le quota et le plan SignWell** : les documents de test sont
       gratuits, les documents réels sont décomptés.
-- [ ] **Déclarer le webhook** `https://<domaine>/api/webhooks/signwell` dans
+- [ ] **Déclarer le webhook** `https://plateforma.nairox.fr/api/webhooks/signwell` dans
       SignWell (événement « document terminé »). Sans lui, rien n'est perdu :
       le bouton « Actualiser » sur la pièce redemande le statut. Le webhook ne
       sert que de déclencheur — la plateforme revérifie toujours le statut
