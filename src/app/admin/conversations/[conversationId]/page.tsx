@@ -6,6 +6,7 @@ import { checkConversationAccess, markConversationRead } from "@/lib/queries/con
 import { formatDate } from "@/lib/format";
 import { SESSION_STATUS } from "@/lib/labels";
 import { PageHeader } from "@/components/admin/page-header";
+import { RefreshOnce } from "@/components/admin/refresh-once";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { MessageThread } from "@/components/content/message-thread";
 
@@ -38,6 +39,7 @@ export default async function ConversationPage({ params }: PageProps<"/admin/con
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
+      <RefreshOnce />
       <PageHeader
         breadcrumb={[
           { label: "Sessions", href: "/admin/sessions" },

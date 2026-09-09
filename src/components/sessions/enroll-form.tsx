@@ -6,6 +6,7 @@ import type { EnrollState } from "@/lib/actions/enrollments";
 import { Input } from "@/components/ui/input";
 import { FormField, FormError } from "@/components/admin/form-field";
 import { SubmitButton } from "@/components/admin/submit-button";
+import { PasswordField } from "@/components/admin/password-field";
 import { NativeSelect } from "@/components/admin/native-select";
 
 // Inscrire un élève : existant (liste « mes élèves ») OU nouveau (nom + email → compte créé).
@@ -25,22 +26,15 @@ export function EnrollForm({
       <div>
         <p className="font-medium">Inscrire un élève</p>
         <p className="text-sm text-foreground-secondary">
-          Choisis un élève existant, ou renseigne nom et email : le compte est créé et inscrit dans la foulée.
+          Choisis un élève existant, ou renseigne nom, email et mot de passe : le compte est créé et
+          inscrit dans la foulée. Aucun mail n&apos;est envoyé, tu transmets les identifiants.
         </p>
       </div>
 
-      {state?.created?.invited ? (
+      {state?.created ? (
         <div className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">
-          Compte créé pour <strong>{state.created.email}</strong>. Invitation envoyée à {state.created.sentTo}
-          {state.created.sandbox ? " (bac à sable : l'élève n'a rien reçu)" : ""} : il choisit son mot de passe
-          depuis le lien du message.
-        </div>
-      ) : null}
-
-      {state?.created && !state.created.invited ? (
-        <div className="rounded-md bg-status-orange-bg px-3 py-2 text-sm text-status-orange">
-          Compte créé pour <strong>{state.created.email}</strong> et inscrit, mais l&apos;invitation n&apos;est pas
-          partie : {state.created.error} — renvoie-la depuis{" "}
+          Compte créé pour <strong>{state.created.email}</strong> et inscrit à la session. Transmets-lui
+          l&apos;email et le mot de passe que tu viens de choisir —{" "}
           <Link href={`/admin/eleves/${state.created.userId}`} className="underline">sa fiche</Link>.
         </div>
       ) : null}
@@ -65,6 +59,9 @@ export function EnrollForm({
             <Input id="e-email" name="email" type="email" defaultValue={v("email")} placeholder="jean@exemple.fr" />
           </FormField>
         </div>
+        {/* Utile seulement pour un nouveau compte : ignoré si l'on choisit
+            un élève déjà présent dans la liste. */}
+        <PasswordField label="Mot de passe (nouvel élève)" errors={e.password} required={false} />
         <SubmitButton pendingLabel="Inscription…">Inscrire</SubmitButton>
       </form>
     </div>

@@ -7,12 +7,15 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/auth/session";
 import { canSupervise, assertOwnerOrSupervisor } from "@/lib/auth/ownership";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendInvitation, sendCompanyInvitation } from "@/lib/auth/invitation";
 import { parseForm, fieldError, emptyToNull, type FormState } from "./shared";
 
 export type AccountState =
   | (NonNullable<FormState> & { created?: { email: string; invited: boolean; sentTo?: string; sandbox?: boolean; error?: string } })
   | undefined;
+
+// Mot de passe posé à la main : c'est le formateur qui le transmet, par le
+// canal qu'il choisit. Huit caractères au minimum, comme l'exige Supabase.
+const passwordField = z.string().min(8, "Huit caractères au minimum").max(72, "Mot de passe trop long");
 
 // Message volontairement neutre : ne révèle pas si l'adresse existe déjà.
 const NEUTRAL = "Création impossible avec cet email. S'il est déjà utilisé sur la plateforme, cherche le compte existant.";
@@ -24,6 +27,10 @@ async function createAccount(params: {
   email: string;
   roleKey: string;
   companyId?: string | null;
+  /// Mot de passe posé par le formateur. Sans lui, on tire un secret que
+  /// personne ne connaît : le compte n'est alors utilisable qu'après un lien
+  /// d'activation.
+  password?: string;
   actor: CurrentUser;
 }): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
   const existing = await prisma.user.findUnique({ where: { email: params.email } });
@@ -32,7 +39,7 @@ async function createAccount(params: {
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email: params.email,
-    password: randomBytes(24).toString("base64url"),
+    password: params.password ?? randomBytes(24).toString("base64url"),
     email_confirm: true,
     user_metadata: { name: params.name },
   });
@@ -59,6 +66,7 @@ async function createAccount(params: {
 const trainerSchema = z.object({
   name: z.string().trim().min(1, "Nom requis"),
   email: z.string().trim().toLowerCase().email("Email invalide"),
+  password: passwordField,
 });
 
 // Créer un compte de formateur : réservé à qui gère les utilisateurs.
@@ -70,18 +78,10 @@ export async function createTrainer(_prev: AccountState, formData: FormData): Pr
   const created = await createAccount({ ...parsed.data, roleKey: "formateur", actor: me });
   if (!created.ok) return fieldError(formData, "email", created.error);
 
-  const invitation = await sendInvitation({
-    student: { id: created.userId, name: parsed.data.name, email: parsed.data.email },
-    trainer: { name: me.name, email: me.email },
-    actorId: me.id,
-  });
-
   revalidatePath("/admin/utilisateurs");
-  return {
-    created: invitation.ok
-      ? { email: parsed.data.email, invited: true, sentTo: invitation.sentTo, sandbox: invitation.sandbox }
-      : { email: parsed.data.email, invited: false, error: invitation.error },
-  };
+  // Aucun mail : le compte est utilisable tout de suite, et c'est le créateur
+  // qui transmet les identifiants par le canal de son choix.
+  return { created: { email: parsed.data.email, invited: false } };
 }
 
 // ── Élève ──────────────────────────────────────────────────────────────────
@@ -102,6 +102,7 @@ const newCompanySchema = z.object({
 const studentSchema = z.object({
   name: z.string().trim().min(1, "Nom requis"),
   email: z.string().trim().toLowerCase().email("Email invalide"),
+  password: passwordField,
   companyId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
   /// « existante », « nouvelle » ou vide (à titre personnel).
   companyMode: z.preprocess(emptyToNull, z.string().nullable()),
@@ -112,13 +113,14 @@ const studentSchema = z.object({
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Nom du contact requis").max(120),
   email: z.string().trim().toLowerCase().email("Email invalide"),
+  password: passwordField,
 });
 
 export async function createStudent(_prev: AccountState, formData: FormData): Promise<AccountState> {
   const me = await requirePermission("can_manage_sessions");
   const parsed = parseForm(studentSchema, formData);
   if (!parsed.ok) return parsed.state;
-  const { name, email, companyId, companyMode } = parsed.data;
+  const { name, email, password, companyId, companyMode } = parsed.data;
 
   let company = companyId;
   if (companyMode === "nouvelle") {
@@ -139,21 +141,11 @@ export async function createStudent(_prev: AccountState, formData: FormData): Pr
     }
   }
 
-  const created = await createAccount({ name, email, roleKey: "eleve", companyId: company, actor: me });
+  const created = await createAccount({ name, email, password, roleKey: "eleve", companyId: company, actor: me });
   if (!created.ok) return fieldError(formData, "email", created.error);
 
-  const invitation = await sendInvitation({
-    student: { id: created.userId, name, email },
-    trainer: { name: me.name, email: me.email },
-    actorId: me.id,
-  });
-
   revalidatePath("/admin/eleves");
-  return {
-    created: invitation.ok
-      ? { email, invited: true, sentTo: invitation.sentTo, sandbox: invitation.sandbox }
-      : { email, invited: false, error: invitation.error },
-  };
+  return { created: { email, invited: false } };
 }
 
 // Rattacher (ou détacher) un élève d'une entreprise, depuis son dossier.
@@ -184,25 +176,59 @@ export async function inviteCompanyContact(companyId: string, _prev: AccountStat
 
   const parsed = parseForm(contactSchema, formData);
   if (!parsed.ok) return parsed.state;
-  const { name, email } = parsed.data;
+  const { name, email, password } = parsed.data;
 
-  const created = await createAccount({ name, email, roleKey: "entreprise", companyId: company.id, actor: me });
+  const created = await createAccount({ name, email, password, roleKey: "entreprise", companyId: company.id, actor: me });
   if (!created.ok) return fieldError(formData, "email", created.error);
 
   // La fiche garde le contact à jour : c'est lui qu'on sollicitera pour signer.
   await prisma.company.update({ where: { id: company.id }, data: { contactName: name, contactEmail: email } });
 
-  const invitation = await sendCompanyInvitation({
-    contact: { id: created.userId, name, email },
-    companyName: company.name,
-    trainer: { name: me.name, email: me.email },
-    actorId: me.id,
-  });
-
   revalidatePath(`/admin/entreprises/${company.id}`);
-  return {
-    created: invitation.ok
-      ? { email, invited: true, sentTo: invitation.sentTo, sandbox: invitation.sandbox }
-      : { email, invited: false, error: invitation.error },
-  };
+  return { created: { email, invited: false } };
+}
+
+// Redéfinir le mot de passe d'un compte. Sans lui, quelqu'un qui oublie le
+// sien resterait bloqué : plus aucun mail d'activation ne part de la
+// plateforme, c'est le formateur qui rouvre l'accès et le transmet.
+export async function setUserPassword(userId: string, _prev: AccountState, formData: FormData): Promise<AccountState> {
+  const me = await requirePermission("can_manage_sessions");
+  const parsed = parseForm(z.object({ password: passwordField }), formData);
+  if (!parsed.ok) return parsed.state;
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, archivedAt: true },
+  });
+  if (!target || target.archivedAt) return fieldError(formData, "password", "Compte introuvable");
+
+  // On ne touche qu'aux comptes de son périmètre : ses élèves, les contacts de
+  // ses entreprises. Les comptes du personnel demandent can_manage_users.
+  if (!(await isInMyScope(target.id, me))) return fieldError(formData, "password", "Compte introuvable");
+
+  const admin = createAdminClient();
+  // User.id EST l'identifiant Supabase Auth (spec §5.1) : pas de table de
+  // correspondance à consulter.
+  const { error } = await admin.auth.admin.updateUserById(target.id, { password: parsed.data.password });
+  if (error) return fieldError(formData, "password", "Changement impossible.");
+
+  await prisma.accessLog.create({
+    data: { userId: me.id, action: "set_password", targetType: "user", targetId: target.id },
+  });
+  revalidatePath(`/admin/eleves/${target.id}`);
+  return { created: { email: target.email, invited: false } };
+}
+
+// Périmètre : un élève inscrit à l'une de mes sessions, ou le contact d'une de
+// mes entreprises. Un superviseur, ou qui gère les utilisateurs, voit tout.
+async function isInMyScope(userId: string, me: CurrentUser): Promise<boolean> {
+  if (canSupervise(me) || me.permissions.has("can_manage_users")) return true;
+  const enrolled = await prisma.enrollment.count({
+    where: { userId, session: { OR: [{ ownerId: me.id }, { trainerId: me.id }] } },
+  });
+  if (enrolled > 0) return true;
+  const contact = await prisma.user.count({
+    where: { id: userId, company: { ownerId: me.id } },
+  });
+  return contact > 0;
 }

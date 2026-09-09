@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, type CurrentUser } from "@/lib/auth/session";
@@ -10,7 +9,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { EnrollmentStatus } from "@/generated/prisma/enums";
 import { parseForm, fieldError, emptyToNull, type FormState } from "./shared";
 import { loadOwnedSession } from "./sessions";
-import { sendInvitation } from "@/lib/auth/invitation";
 import { ensureConversation } from "@/lib/queries/conversations";
 
 // État étendu : après création d'un compte élève, le compte-rendu de
@@ -27,10 +25,17 @@ const enrollSchema = z
     userId: z.preprocess(emptyToNull, z.string().uuid().nullable()),
     name: z.preprocess(emptyToNull, z.string().trim().nullable()),
     email: z.preprocess(emptyToNull, z.string().trim().toLowerCase().email("Email invalide").nullable()),
+    /// Posé à la main quand on crée le compte au passage : c'est le formateur
+    /// qui transmet les identifiants.
+    password: z.preprocess(emptyToNull, z.string().min(8, "Huit caractères au minimum").max(72).nullable()),
   })
   .refine((d) => d.userId || (d.name && d.email), {
     message: "Choisis un élève existant, ou renseigne nom et email pour en créer un",
     path: ["userId"],
+  })
+  .refine((d) => d.userId || d.password, {
+    message: "Choisis le mot de passe du nouvel élève",
+    path: ["password"],
   });
 
 // Message volontairement neutre : ne révèle pas si l'email existe chez un autre formateur.
@@ -46,25 +51,6 @@ async function isInMyRoster(userId: string, me: CurrentUser) {
   return n > 0;
 }
 
-// De quoi rédiger l'invitation : intitulé de la formation, nom de la session
-// et formateur à qui l'élève pourra répondre.
-async function invitationContext(sessionId: string) {
-  const session = await prisma.session.findUniqueOrThrow({
-    where: { id: sessionId },
-    select: {
-      name: true,
-      trainer: { select: { name: true, email: true } },
-      owner: { select: { name: true, email: true } },
-      formationVersion: { select: { formation: { select: { name: true } } } },
-    },
-  });
-  const trainer = session.trainer ?? session.owner;
-  return {
-    formationName: session.formationVersion.formation.name,
-    sessionName: session.name,
-    trainer: { name: trainer.name, email: trainer.email },
-  };
-}
 
 async function assertEnrollable(sessionId: string, me: Parameters<typeof loadOwnedSession>[1]) {
   const session = await loadOwnedSession(sessionId, me);
@@ -86,7 +72,7 @@ export async function enrollStudent(sessionId: string, _prev: EnrollState, formD
   await assertEnrollable(sessionId, me);
   const parsed = parseForm(enrollSchema, formData);
   if (!parsed.ok) return parsed.state;
-  const { userId, name, email } = parsed.data;
+  const { userId, name, email, password } = parsed.data;
 
   // 1. Élève existant choisi dans la liste
   if (userId) {
@@ -109,13 +95,12 @@ export async function enrollStudent(sessionId: string, _prev: EnrollState, formD
     return r.already ? fieldError(formData, "email", "Déjà inscrit à cette session") : undefined;
   }
 
-  // Mot de passe initial aléatoire, jamais affiché ni transmis : il n'existe
-  // que pour créer le compte. L'élève pose le sien via le lien d'invitation.
-  const initialPassword = randomBytes(24).toString("base64url");
+  // Le mot de passe est celui qu'a choisi le formateur : il le transmet
+  // lui-même, par le canal qui lui convient.
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email: email!,
-    password: initialPassword,
+    password: password!,
     email_confirm: true,
     user_metadata: { name },
   });
@@ -138,53 +123,8 @@ export async function enrollStudent(sessionId: string, _prev: EnrollState, formD
     prisma.enrollment.create({ data: { sessionId, userId: data.user.id } }),
     prisma.conversation.create({ data: { sessionId, userId: data.user.id } }),
   ]);
-  const context = await invitationContext(sessionId);
-  const invitation = await sendInvitation({
-    student: { id: data.user.id, name: name!, email: email! },
-    trainer: context.trainer,
-    formationName: context.formationName,
-    sessionName: context.sessionName,
-    actorId: me.id,
-  });
-
   revalidatePath(`/admin/sessions/${sessionId}`);
-  return {
-    created: invitation.ok
-      ? { userId: data.user.id, email: email!, invited: true, sentTo: invitation.sentTo, sandbox: invitation.sandbox }
-      : { userId: data.user.id, email: email!, invited: false, error: invitation.error },
-  };
-}
-
-// Renvoi d'une invitation : lien perdu, expiré, ou envoi qui avait échoué.
-// Le compte reste le même, seul un nouveau lien est émis.
-export async function resendInvitation(userId: string): Promise<{ ok: boolean; message: string }> {
-  const me = await requirePermission("can_manage_sessions");
-  const student = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, email: true, archivedAt: true } });
-  if (!student || student.archivedAt || !(await isInMyRoster(student.id, me))) {
-    throw new Error("Élève introuvable");
-  }
-
-  // La session la plus récente sert de contexte au message.
-  const enrollment = await prisma.enrollment.findFirst({
-    where: { userId, session: canSupervise(me) ? {} : { OR: [{ ownerId: me.id }, { trainerId: me.id }] } },
-    orderBy: { enrolledAt: "desc" },
-    select: { sessionId: true },
-  });
-  if (!enrollment) throw new Error("Cet élève n'est inscrit à aucune de vos sessions");
-
-  const context = await invitationContext(enrollment.sessionId);
-  const invitation = await sendInvitation({
-    student: { id: student.id, name: student.name, email: student.email },
-    trainer: context.trainer,
-    formationName: context.formationName,
-    sessionName: context.sessionName,
-    actorId: me.id,
-  });
-
-  revalidatePath(`/admin/eleves/${userId}`);
-  return invitation.ok
-    ? { ok: true, message: `Invitation renvoyée à ${invitation.sentTo}${invitation.sandbox ? " (bac à sable)" : ""}.` }
-    : { ok: false, message: invitation.error };
+  return { created: { userId: data.user.id, email: email!, invited: false } };
 }
 
 // Changement de statut : jamais de suppression (vécu). completed pose completedAt.

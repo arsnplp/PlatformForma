@@ -73,10 +73,9 @@ mise en production, ou juste après. Cocher au fur et à mesure.
 ## Application
 
 - [ ] **Définir `NEXT_PUBLIC_APP_URL`** avec l'URL publique (ex. `https://plateforma.nairox.fr`).
-      Sans elle, la variable `{{lien_espace_eleve}}` des mails pointe vers
-      `http://localhost:3000/espace`, **et surtout le lien d'activation envoyé aux
-      élèves pointe vers une machine locale** : l'invitation serait inutilisable.
-      **À faire avant tout envoi réel.**
+      Sans elle, la variable `{{lien_espace_eleve}}` des mails du process pointe
+      vers `http://localhost:3000/espace` : les élèves recevraient un lien
+      inutilisable. **À faire avant tout envoi réel.**
 - [ ] Appliquer les migrations Prisma sur la base de production (`prisma migrate deploy`).
 - [ ] Lancer le seed des rôles et permissions, et créer le compte super-administrateur.
 - [ ] Vérifier que les policies RLS sont bien actives sur la base de production
@@ -125,20 +124,25 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       (`export_dossier_eleve`, `export_dossier_session`) : qui a sorti quel
       dossier, et quand.
 
-## Invitation des élèves (Palier 4)
+## Comptes et mots de passe
 
-- [ ] **Allonger la durée de validité des liens e-mail** dans Supabase
-      (*Authentication → Emails → Email OTP Expiration*) : 1 heure par défaut,
-      ce qui est court pour une invitation qu'un élève ouvre le soir. Viser 24 h.
-      Le lien reste à usage unique, et un lien expiré est toujours rattrapable
-      par « Renvoyer l'invitation » depuis la fiche de l'élève.
-- [ ] **Ne pas activer les mails d'authentification de Supabase** : la plateforme
-      génère elle-même le lien et l'envoie par Resend, pour que le bac à sable
-      s'applique et que le texte soit le nôtre. Un mail envoyé directement par
-      Supabase échapperait au garde-fou `MAIL_MODE`.
-- [ ] Vérifier après bascule en production qu'une invitation réelle arrive bien,
-      que le lien ouvre la page d'activation et que le mot de passe choisi
-      permet ensuite de se connecter.
+La plateforme **n'envoie plus d'invitation** : à la création d'un compte —
+élève, formateur, contact entreprise — le mot de passe est posé à la main dans
+le formulaire, et c'est le créateur qui transmet les identifiants par le canal
+de son choix.
+
+- [ ] **Ne pas activer les mails d'authentification de Supabase.** Aucun mail
+      d'activation n'est attendu ; s'ils étaient actifs, Supabase enverrait des
+      messages hors de tout garde-fou `MAIL_MODE`.
+- [ ] **Politique de mot de passe** (*Authentication → Policies*) : la
+      plateforme impose huit caractères au minimum. Si Supabase est réglé plus
+      strictement, la création échouerait avec un message générique — aligner
+      les deux.
+- [ ] Quelqu'un qui perd son mot de passe **ne peut pas le réinitialiser seul** :
+      c'est « Changer son mot de passe » depuis sa fiche. Prévoir le canal par
+      lequel il vous joint.
+- [ ] Vérifier après bascule en production qu'un compte créé avec son mot de
+      passe permet bien de se connecter du premier coup.
 
 ## Inaltérabilité des émargements
 

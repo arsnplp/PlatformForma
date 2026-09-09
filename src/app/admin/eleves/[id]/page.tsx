@@ -9,7 +9,7 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
-import { ResendInvitation } from "@/components/admin/resend-invitation";
+import { ResetPasswordForm } from "@/components/admin/reset-password-form";
 import { StudentTime } from "@/components/admin/student-time";
 import { StudentCompany } from "@/components/admin/student-company";
 import { DocumentList } from "@/components/documents/document-list";
@@ -56,7 +56,7 @@ export default async function StudentDossierPage({ params }: PageProps<"/admin/e
             <Button asChild variant="outline" size="sm">
               <Link href={`/api/exports?eleve=${student.id}`}>Dossier de preuve</Link>
             </Button>
-            <ResendInvitation userId={student.id} />
+            <ResetPasswordForm userId={student.id} />
           </>
         }
       />

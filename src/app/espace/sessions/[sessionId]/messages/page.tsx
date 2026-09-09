@@ -5,6 +5,7 @@ import { getSessionAccess } from "@/lib/queries/student-space";
 import { ensureConversation, markConversationRead } from "@/lib/queries/conversations";
 import { prisma } from "@/lib/prisma";
 import { MessageThread } from "@/components/content/message-thread";
+import { RefreshOnce } from "@/components/admin/refresh-once";
 
 // Fil de l'élève avec son formateur, pour cette session (spec §11).
 export default async function StudentMessagesPage({ params }: PageProps<"/espace/sessions/[sessionId]/messages">) {
@@ -44,6 +45,7 @@ export default async function StudentMessagesPage({ params }: PageProps<"/espace
 
   return (
     <div className="space-y-6">
+      <RefreshOnce />
       {header}
       <p className="text-sm text-foreground-secondary">
         Vos échanges avec {session.trainer?.name ?? "votre formateur"} pour {session.name}. Les messages envoyés

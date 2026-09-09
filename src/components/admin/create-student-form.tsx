@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FormField, FormError } from "./form-field";
 import { NativeSelect } from "./native-select";
 import { SubmitButton } from "./submit-button";
+import { PasswordField } from "./password-field";
 
 // Création d'un élève, avec son entreprise de rattachement. Si elle n'existe
 // pas encore, on la crée dans la foulée plutôt que d'obliger un aller-retour.
@@ -26,21 +27,15 @@ export function CreateStudentForm({ companies }: { companies: { id: string; name
       <div>
         <p className="font-medium">Créer un élève</p>
         <p className="text-sm text-foreground-secondary">
-          Le compte est créé et l&apos;élève reçoit son invitation. Son inscription à une session se fait ensuite
+          Le compte est utilisable tout de suite avec l&apos;email et le mot de passe posés ici. Son inscription à une session se fait ensuite
           depuis la fiche de la session.
         </p>
       </div>
 
-      {state?.created?.invited ? (
+      {state?.created ? (
         <p className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">
-          Élève créé : <strong>{state.created.email}</strong>. Invitation envoyée à {state.created.sentTo}
-          {state.created.sandbox ? " (bac à sable : l'élève n'a rien reçu)" : ""}.
-        </p>
-      ) : null}
-      {state?.created && !state.created.invited ? (
-        <p className="rounded-md bg-status-orange-bg px-3 py-2 text-sm text-status-orange">
-          Élève créé : <strong>{state.created.email}</strong>, mais l&apos;invitation n&apos;est pas partie :{" "}
-          {state.created.error}
+          Élève créé : <strong>{state.created.email}</strong>. Transmets-lui l&apos;email et le mot de passe
+          que tu viens de choisir.
         </p>
       ) : null}
 
@@ -54,6 +49,8 @@ export function CreateStudentForm({ companies }: { companies: { id: string; name
             <Input id="s-email" name="email" type="email" defaultValue={v("email")} placeholder="jean@exemple.fr" required />
           </FormField>
         </div>
+
+        <PasswordField errors={e.password} />
 
         <FormField id="s-company" label="Entreprise" errors={e.companyId}>
           <NativeSelect id="s-company" value={choice} onChange={(event) => setChoice(event.target.value)}>
@@ -103,7 +100,7 @@ export function CreateStudentForm({ companies }: { companies: { id: string; name
         ) : null}
 
         <div className="flex gap-2">
-          <SubmitButton pendingLabel="Création…">Créer et inviter</SubmitButton>
+          <SubmitButton pendingLabel="Création…">Créer le compte</SubmitButton>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Fermer</Button>
         </div>
       </form>

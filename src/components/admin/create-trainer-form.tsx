@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FormField, FormError } from "./form-field";
 import { SubmitButton } from "./submit-button";
+import { PasswordField } from "./password-field";
 
-// Création d'un compte formateur. Aucun mot de passe n'est transmis : la
-// personne pose le sien depuis le lien reçu par mail.
+// Création d'un compte formateur. Le mot de passe est posé ici : aucun mail
+// ne part, c'est le créateur qui transmet les identifiants.
 export function CreateTrainerForm() {
   const [state, formAction] = useActionState<AccountState, FormData>(createTrainer, undefined);
   const [open, setOpen] = useState(false);
@@ -24,21 +25,15 @@ export function CreateTrainerForm() {
       <div>
         <p className="font-medium">Créer un compte formateur</p>
         <p className="text-sm text-foreground-secondary">
-          Il recevra une invitation pour choisir son mot de passe. Il aura son propre périmètre : ses formations,
-          ses sessions, ses élèves.
+          Le compte est utilisable immédiatement avec l&apos;email et le mot de passe posés ici.
+          Il aura son propre périmètre : ses formations, ses sessions, ses élèves.
         </p>
       </div>
 
-      {state?.created?.invited ? (
+      {state?.created ? (
         <p className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">
-          Compte créé pour <strong>{state.created.email}</strong>. Invitation envoyée à {state.created.sentTo}
-          {state.created.sandbox ? " (bac à sable : rien n'est parti au vrai destinataire)" : ""}.
-        </p>
-      ) : null}
-      {state?.created && !state.created.invited ? (
-        <p className="rounded-md bg-status-orange-bg px-3 py-2 text-sm text-status-orange">
-          Compte créé pour <strong>{state.created.email}</strong>, mais l&apos;invitation n&apos;est pas partie :{" "}
-          {state.created.error}
+          Compte créé pour <strong>{state.created.email}</strong>. Transmets-lui l&apos;email et le mot de passe
+          que tu viens de choisir.
         </p>
       ) : null}
 
@@ -52,8 +47,9 @@ export function CreateTrainerForm() {
             <Input id="t-email" name="email" type="email" defaultValue={v("email")} placeholder="fatima@exemple.fr" required />
           </FormField>
         </div>
+        <PasswordField errors={e.password} />
         <div className="flex gap-2">
-          <SubmitButton pendingLabel="Création…">Créer et inviter</SubmitButton>
+          <SubmitButton pendingLabel="Création…">Créer le compte</SubmitButton>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Fermer</Button>
         </div>
       </form>
