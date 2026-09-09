@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ADMIN_NAV, ADMIN_PEOPLE, ADMIN_MORE } from "@/components/admin/nav";
 import { NavBar } from "@/components/admin/nav-bar";
 import { countUnreadMessages } from "@/lib/queries/conversations";
+import { AssistantBubble } from "@/components/admin/assistant-bubble";
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const user = await requireUser("/admin");
@@ -34,6 +35,10 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">{children}</main>
+
+      {/* L'assistant n'apparaît que pour qui a le droit de s'en servir, et
+          seulement si la plateforme a une clé pour le faire raisonner. */}
+      {hasPermission(user, "can_use_assistant") && process.env.ANTHROPIC_API_KEY ? <AssistantBubble /> : null}
     </div>
   );
 }

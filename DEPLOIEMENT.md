@@ -124,6 +124,23 @@ mise en production, ou juste après. Cocher au fur et à mesure.
       (`export_dossier_eleve`, `export_dossier_session`) : qui a sorti quel
       dossier, et quand.
 
+## Assistant (Claude API)
+
+- [ ] **Définir `ANTHROPIC_API_KEY`** (console.anthropic.com). Sans elle, la
+      bulle d'assistance ne s'affiche pas ; le reste de la plateforme
+      fonctionne normalement.
+- [ ] **Si la clé a été créée au niveau de l'organisation** et non dans un
+      espace de travail, l'API refuse la requête : définir aussi
+      `ANTHROPIC_WORKSPACE_ID` (Settings → Workspaces dans la console), ou
+      recréer une clé à l'intérieur d'un espace de travail.
+- [ ] **Créditer le compte Anthropic** : sans crédit, l'API répond en erreur.
+- [ ] Le droit d'usage est la permission `can_use_assistant`, accordée au
+      super-administrateur par la migration. L'ouvrir aux formateurs se fait
+      en base, sans toucher au code.
+- [ ] **Surveiller la dépense** : chaque échange consomme des jetons. Les
+      actions de l'assistant sont journalisées dans `AccessLog` avec le
+      préfixe `assistant_`.
+
 ## Comptes et mots de passe
 
 La plateforme **n'envoie plus d'invitation** : à la création d'un compte —

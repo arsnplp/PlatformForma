@@ -15,6 +15,7 @@ export const PERMISSIONS = {
   can_export_dossier: "Exporter un dossier de preuve",
   can_manage_visio: "Créer et gérer les visios",
   can_generate_demo_data: "Générer des données de démonstration (estampillées isDemo)",
+  can_use_assistant: "Utiliser l'assistant : interroger ses données et agir en son nom",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
