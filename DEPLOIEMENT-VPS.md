@@ -31,12 +31,29 @@ dig +short plateforma.nairox.fr
 
 Next.js 16 exige Node ≥ 20.9. On installe Node 22 LTS.
 
+> **Si le VPS héberge déjà autre chose, lire l'annexe « Cohabitation » en fin
+> de fichier AVANT de lancer quoi que ce soit.** Deux commandes de cette
+> section touchent l'ensemble de la machine.
+
 ```bash
-sudo apt update && sudo apt upgrade -y
+sudo apt update
+sudo apt install -y git nginx certbot python3-certbot-nginx
+```
+
+Node : **ne pas installer NodeSource si un autre projet Node tourne déjà sur
+la machine** — le paquet remplace le Node du système et fera basculer l'autre
+projet de version. Dans ce cas, voir l'annexe. Sur un VPS où rien d'autre
+n'utilise Node :
+
+```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs git nginx certbot python3-certbot-nginx
+sudo apt install -y nodejs
 node -v && npm -v && nginx -v
 ```
+
+On ne lance **pas** `apt upgrade` : mettre à jour tous les paquets d'un VPS
+partagé pour installer une application, c'est prendre un risque sur les
+services déjà en place pour rien.
 
 **Mémoire.** `next build` compile tout le projet et tient mal sous 2 Go. Si
 `free -m` annonce moins de 2 Go de RAM, ajouter du swap une fois pour toutes,
@@ -44,6 +61,7 @@ sinon la compilation sera tuée par le noyau sans message clair :
 
 ```bash
 free -m
+ls -la /swapfile 2>/dev/null   # s'il existe déjà, PASSER cette étape
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
@@ -90,7 +108,8 @@ ssh -T git@github-plateforma   # doit répondre « successfully authenticated »
 Cloner :
 
 ```bash
-sudo mkdir -p /var/www && sudo chown "$USER:$USER" /var/www
+sudo mkdir -p /var/www/plateforma
+sudo chown "$USER:$USER" /var/www/plateforma   # ce dossier SEULEMENT
 git clone git@github-plateforma:arsnplp/PlatformForma.git /var/www/plateforma
 cd /var/www/plateforma
 ```
@@ -303,16 +322,25 @@ sudo chmod 700 /usr/local/bin/plateforma-cron
 sudo /usr/local/bin/plateforma-cron process    # essai immédiat
 ```
 
-Puis `sudo crontab -e` et ajouter :
+Les deux tâches vont dans **leur propre fichier**, pas dans la crontab de
+root : `CRON_TZ` s'applique à toutes les lignes qui le suivent dans un fichier,
+et il changerait donc le fuseau des tâches déjà en place.
 
-```cron
+```bash
+sudo tee /etc/cron.d/plateforma > /dev/null <<'EOF'
 CRON_TZ=Europe/Paris
-0 7 * * *   /usr/local/bin/plateforma-cron process        >> /var/log/plateforma-cron.log 2>&1
-*/15 * * * * /usr/local/bin/plateforma-cron notifications >> /var/log/plateforma-cron.log 2>&1
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+0 7 * * *    root /usr/local/bin/plateforma-cron process        >> /var/log/plateforma-cron.log 2>&1
+*/15 * * * * root /usr/local/bin/plateforma-cron notifications >> /var/log/plateforma-cron.log 2>&1
+EOF
+sudo chmod 644 /etc/cron.d/plateforma
 ```
 
-`CRON_TZ=Europe/Paris` règle le décalage été/hiver tout seul : la convocation
-J-7 part bien à 7h locales toute l'année.
+Un fichier de `/etc/cron.d` porte l'utilisateur en sixième colonne (`root`), à
+la différence d'une crontab. `CRON_TZ=Europe/Paris` règle le décalage
+été/hiver tout seul : la convocation J-7 part bien à 7h locales toute l'année.
 
 ---
 
@@ -384,3 +412,109 @@ La contrepartie est réelle : un `npm run dev` sur la machine de développement
 utilisateur, c'est tenable. Dès qu'un vrai élève y dépose une pièce, créer un
 second projet Supabase pour le développement, et n'y toucher que là — les
 étapes 3 et 4 sont exactement les mêmes, avec le `seed` en plus.
+
+---
+
+## Annexe — Cohabitation avec ce qui tourne déjà sur le VPS
+
+Cette procédure installe une application sur une machine qui en héberge
+peut-être d'autres. Rien ici ne supprime de données, mais **cinq gestes
+touchent l'ensemble du système**. À lire avant de commencer.
+
+### L'audit préalable, en lecture seule
+
+Il ne modifie rien. Sa sortie dit lesquelles des variantes ci-dessous
+s'appliquent.
+
+```bash
+echo "=== OS ==="; head -2 /etc/os-release
+echo "=== Node ==="; which node && node -v || echo "aucun node"
+echo "=== serveur web ==="; systemctl is-active nginx apache2 caddy 2>/dev/null
+echo "=== ports occupés ==="; sudo ss -tlnp | grep -E ':(80|443|3000|3001) '
+echo "=== /var/www ==="; ls -la /var/www 2>/dev/null
+echo "=== sites nginx ==="; ls /etc/nginx/sites-enabled/ 2>/dev/null
+echo "=== services ==="; systemctl list-units --type=service --state=running --no-pager \
+  | grep -viE 'systemd|dbus|cron|ssh|networkd|resolved|journald|logind|udev|getty|polkit|rsyslog|timesync|unattended'
+echo "=== crontab root ==="; sudo crontab -l 2>/dev/null || echo "vide"
+echo "=== pm2 ==="; which pm2 && pm2 list 2>/dev/null || echo "pas de pm2"
+echo "=== swap ==="; free -m | grep -i swap; ls -la /swapfile 2>/dev/null
+```
+
+### Les cinq points de contact, et leur parade
+
+**1. Node déjà installé pour un autre projet.** Le paquet NodeSource remplace
+le Node du système : l'autre projet changerait de version sans prévenir, avec
+ses modules natifs compilés pour l'ancienne. Parade — installer Node pour le
+seul utilisateur qui fait tourner la plateforme, sans toucher au Node système :
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 22
+nvm which 22          # noter ce chemin : il ira dans le service systemd
+```
+
+Le service systemd doit alors pointer sur ce Node-là plutôt que sur celui du
+système :
+
+```ini
+ExecStart=/home/<user>/.nvm/versions/node/v22.x.x/bin/node /var/www/plateforma/node_modules/.bin/next start -H 127.0.0.1 -p 3000
+```
+
+**2. Un autre serveur web (Apache, Caddy).** Installer nginx crée un conflit
+sur le port 80 et peut faire tomber les sites en place. Si Apache sert déjà le
+VPS, ne pas installer nginx : garder Apache et lui ajouter un `VirtualHost`
+mandataire. Les réglages qui comptent restent les mêmes — `ProxyPass` vers
+`127.0.0.1:3000`, et surtout **pas de mise en tampon sur `/api/assistant`** :
+
+```apache
+<VirtualHost *:80>
+    ServerName plateforma.nairox.fr
+    ProxyPreserveHost On
+    ProxyPass        /api/assistant http://127.0.0.1:3000/api/assistant flushpackets=on
+    ProxyPassReverse /api/assistant http://127.0.0.1:3000/api/assistant
+    ProxyPass        / http://127.0.0.1:3000/
+    ProxyPassReverse / http://127.0.0.1:3000/
+</VirtualHost>
+```
+
+Puis `sudo certbot --apache -d plateforma.nairox.fr`.
+
+**3. Le port 3000 déjà pris.** C'est le port par défaut de la plupart des
+applications Node : le service refuserait de démarrer. Prendre un port libre
+(3010, par exemple) et le reporter aux **deux** endroits : `-p 3010` dans
+`ExecStart`, et les quatre `proxy_pass` de la configuration nginx.
+
+**4. `/var/www` partagé avec d'autres sites.** Ne jamais s'approprier le
+dossier parent : seul `/var/www/plateforma` change de propriétaire. C'est déjà
+ce que fait l'étape 2. En cas de doute, installer ailleurs — `/srv/plateforma`
+ou `/home/<user>/plateforma` conviennent aussi bien, à condition de reporter le
+chemin dans le service systemd et les scripts.
+
+**5. Des tâches cron déjà en place.** `CRON_TZ` s'applique à toutes les lignes
+qui le suivent *dans le même fichier* : posé dans la crontab de root, il
+changerait le fuseau des tâches existantes. L'étape 8 passe pour cette raison
+par `/etc/cron.d/plateforma`, un fichier séparé qui n'affecte que ses deux
+lignes.
+
+### Ce qui, en revanche, ne touche à rien
+
+- Le **bloc `server` nginx** : nginx sélectionne par `server_name`, un nouveau
+  domaine ne détourne pas le trafic des autres. `systemctl reload nginx`
+  recharge sans couper les connexions en cours.
+- **Certbot** : il ne modifie que le fichier du domaine demandé et ajoute son
+  minuteur de renouvellement.
+- Le **service `plateforma`** : nom neuf, à vérifier tout de même par
+  `systemctl status plateforma` — il doit répondre « could not be found ».
+- Le **clone du dépôt** et le `.env` : confinés au dossier de l'application.
+- `ufw allow` : ajoute une règle, n'en retire aucune.
+
+### Vérification après coup
+
+Une fois la plateforme en ligne, contrôler que l'existant n'a pas bougé :
+
+```bash
+systemctl status nginx --no-pager        # ou apache2
+curl -I https://<votre-autre-site>       # doit toujours répondre 200
+sudo ss -tlnp | grep -E ':(80|443) '
+```
