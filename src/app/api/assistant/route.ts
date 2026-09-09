@@ -39,8 +39,11 @@ export async function POST(request: NextRequest) {
   const history = (body.messages ?? []).slice(-20);
   if (history.length === 0) return NextResponse.json({ error: "Message vide" }, { status: 400 });
 
-  // On ne fait confiance qu'aux noms d'outils qu'on connaît.
-  const approved = (body.approved ?? []).filter((name) => WRITE_TOOLS.includes(name));
+  // « * » = l'utilisateur a validé le plan annoncé et autorise l'ensemble des
+  // écritures POUR CE TOUR. Sinon, on ne retient que les noms qu'on connaît :
+  // le client ne peut pas inventer un droit.
+  const asked = body.approved ?? [];
+  const approved = asked.includes("*") ? [...WRITE_TOOLS] : asked.filter((name) => WRITE_TOOLS.includes(name));
   const ctx: ToolContext = { me, approved, trace: [] };
 
   // Une clé créée au niveau de l'organisation (et non dans un espace de

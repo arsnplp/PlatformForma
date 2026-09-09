@@ -97,10 +97,11 @@ export function AssistantBubble() {
     ask([...messages, { role: "user", content: question }]);
   }
 
-  // Confirmer : on rejoue le même échange, cette fois avec l'autorisation.
+  // Confirmer vaut pour TOUTE la demande en cours, pas seulement la première
+  // action : sinon une demande en sept étapes ferait cliquer sept fois.
+  // L'autorisation ne dure que ce tour-là.
   function confirm() {
-    const approved = [...new Set(pending.map((a) => a.tool))];
-    ask([...messages, { role: "user", content: "Oui, confirme et fais-le." }], approved);
+    ask([...messages, { role: "user", content: "Oui, vas-y : fais tout ce que tu as annoncé." }], ["*"]);
   }
 
   if (!open) {
@@ -168,6 +169,9 @@ export function AssistantBubble() {
         {pending.length > 0 ? (
           <div className="space-y-2 rounded-lg border border-status-orange bg-status-orange-bg px-3 py-2">
             <p className="text-xs font-medium text-status-orange">À confirmer</p>
+            <p className="text-xs text-status-orange">
+              Confirmer autorise l&apos;ensemble de ce que Mini Arsène vient d&apos;annoncer.
+            </p>
             <ul className="space-y-1 text-sm">
               {pending.map((a, i) => <li key={i}>{a.summary}</li>)}
             </ul>
