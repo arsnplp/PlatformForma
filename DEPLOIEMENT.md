@@ -3,6 +3,9 @@
 Liste tenue à jour au fil des paliers. Tout ce qui doit être réglé avant la
 mise en production, ou juste après. Cocher au fur et à mesure.
 
+La procédure d'installation sur le VPS (dossier, dépôt, nginx, certbot,
+service, cron) est dans **`DEPLOIEMENT-VPS.md`**.
+
 ## Envoi de mails (Palier 3)
 
 - [ ] **Vérifier le domaine `plateforma.nairox.fr` chez Resend** (configuration DNS en cours).
