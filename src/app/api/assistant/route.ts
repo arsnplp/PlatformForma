@@ -7,7 +7,7 @@ import { systemPrompt } from "@/lib/assistant/prompt";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// L'assistant du back-office. Le modèle raisonne chez Anthropic, mais chaque
+// Mini Arsène, l'assistant du back-office. Le modèle raisonne chez Anthropic, mais chaque
 // outil s'exécute ICI, avec les droits de la personne connectée : la clé de
 // service n'entre jamais en jeu.
 //
@@ -15,7 +15,9 @@ export const dynamic = "force-dynamic";
 // puis la trace de ce que l'assistant a fait ou propose de faire.
 
 const MODEL = "claude-opus-5";
-const MAX_TURNS = 12;
+// Une demande peut légitimement enchaîner des dizaines d'actions (créer une
+// formation, son contenu, une session, dix comptes, leurs pièces à fournir).
+const MAX_TURNS = 120;
 
 type Body = {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   }
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "Assistant non configuré : ANTHROPIC_API_KEY manquante." }, { status: 503 });
+    return NextResponse.json({ error: "Mini Arsène n'est pas configuré : ANTHROPIC_API_KEY manquante." }, { status: 503 });
   }
 
   const body = (await request.json()) as Body;
@@ -84,8 +86,8 @@ export async function POST(request: NextRequest) {
         // d'un message d'API, mais nous en avons besoin pour diagnostiquer.
         console.error("[assistant]", error);
         const message = error instanceof Anthropic.APIError
-          ? `L'assistant n'a pas pu répondre (${error.status}).`
-          : "L'assistant n'a pas pu répondre.";
+          ? `Mini Arsène n'a pas pu répondre (${error.status}).`
+          : "Mini Arsène n'a pas pu répondre.";
         send({ type: "error", value: message });
       } finally {
         controller.close();

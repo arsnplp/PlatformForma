@@ -12,11 +12,12 @@ type Action = { tool: string; summary: string; done: boolean };
 const SUGGESTIONS = [
   "Qu'est-ce qui m'attend aujourd'hui ?",
   "Où en est chaque élève de ma session en cours ?",
-  "Qui n'a pas encore rendu ses exercices ?",
+  "Crée une formation, une session, et inscris-y des élèves",
 ];
 
-// Assistant du back-office. Il voit les données de la personne connectée et
-// agit en son nom — mais toute écriture passe par une confirmation explicite.
+// Mini Arsène, l'assistant du back-office. Il voit les données de la personne
+// connectée et agit en son nom — mais toute écriture passe par une
+// confirmation explicite : une phrase ambiguë ne doit rien créer.
 export function AssistantBubble() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -46,7 +47,7 @@ export function AssistantBubble() {
       });
       if (!response.ok || !response.body) {
         const payload = await response.json().catch(() => null);
-        setError(payload?.error ?? "L'assistant est indisponible.");
+        setError(payload?.error ?? "Mini Arsène est indisponible.");
         setMessages(history);
         return;
       }
@@ -82,7 +83,7 @@ export function AssistantBubble() {
       if (actions.some((a) => a.done)) router.refresh();
       setPending(actions.filter((a) => !a.done));
     } catch {
-      setError("La connexion à l'assistant a échoué.");
+      setError("La connexion à Mini Arsène a échoué.");
       setMessages(history);
     } finally {
       setBusy(false);
@@ -107,10 +108,10 @@ export function AssistantBubble() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Ouvrir l'assistant"
+        aria-label="Ouvrir Mini Arsène"
         className="fixed bottom-6 right-6 z-40 flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-105"
       >
-        Assistant
+        Mini Arsène
       </button>
     );
   }
@@ -119,7 +120,7 @@ export function AssistantBubble() {
     <div className="fixed bottom-6 right-6 z-40 flex h-[min(34rem,80vh)] w-[min(26rem,calc(100vw-3rem))] flex-col rounded-xl border bg-background shadow-xl">
       <header className="flex items-center justify-between gap-3 border-b px-4 py-3">
         <div>
-          <p className="text-sm font-medium">Assistant</p>
+          <p className="text-sm font-medium">Mini Arsène</p>
           <p className="text-xs text-foreground-tertiary">Il voit vos dossiers et agit avec vos droits.</p>
         </div>
         <span className="flex items-center gap-1">
@@ -136,7 +137,7 @@ export function AssistantBubble() {
         {messages.length === 0 ? (
           <div className="space-y-2">
             <p className="text-sm text-foreground-secondary">
-              Posez une question sur vos élèves, vos sessions ou vos formations — ou demandez-moi d&apos;agir.
+              Posez une question sur vos élèves, vos sessions ou vos formations — ou confiez-moi le travail.
             </p>
             {SUGGESTIONS.map((s) => (
               <button
@@ -189,7 +190,7 @@ export function AssistantBubble() {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(draft); }
           }}
           rows={2}
-          placeholder={busy ? "L'assistant réfléchit…" : "Votre question…"}
+          placeholder={busy ? "Mini Arsène travaille…" : "Votre question…"}
           disabled={busy}
           className="resize-none text-sm"
         />
