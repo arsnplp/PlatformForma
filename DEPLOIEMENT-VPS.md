@@ -9,6 +9,138 @@ reste à régler* (mails, signature, rétention…) : les deux se lisent ensembl
 
 ---
 
+## Réglages retenus pour le VPS `srv1278016`
+
+Audit du 9 septembre 2026. La machine héberge **26 sites**, deux applications
+Next.js sous PM2 (`comeback-site` sur le port 3000, `comeback-app` sur 3001),
+Docker, et 11 tâches cron. Cinq écarts par rapport à la procédure générique en
+découlent — les suivre, ils priment sur les sections ci-dessous.
+
+| Point | Générique | **Ici** | Pourquoi |
+| --- | --- | --- | --- |
+| Node | NodeSource système | **`/opt/node22`, hors du `PATH`** | `/usr/bin/node` est en v20.20.2 et fait tourner les deux apps PM2. Le remplacer les ferait changer de version. |
+| Port | 3000 | **3002** | 3000 et 3001 sont pris par `comeback-site` et `comeback-app`. |
+| Service | systemd ou PM2 | **systemd** | PM2 tourne déjà, mais son démon est en Node 20 et porte les deux applications de production. Un service systemd isolé ne les touche pas. |
+| Swap | si < 2 Go | **obligatoire, avant le build** | La machine a **0 Mo de swap**. Sans lui, un `next build` qui déborde fait choisir une victime au noyau — possiblement une app de production. |
+| Cron | `/etc/cron.d` | **`/etc/cron.d`** | Confirmé : 11 tâches existent dans la crontab de root, `CRON_TZ` les aurait toutes décalées. |
+
+### Node isolé dans `/opt/node22`
+
+`@supabase/supabase-js` réclame Node ≥ 22 ; le Node système est en 20.20.2, et
+la branche 20 n'est plus maintenue. On installe donc Node 22 **dans son propre
+dossier, jamais ajouté au `PATH`** : aucun autre projet ne peut le voir, et
+`/usr/bin/node` reste intact pour PM2.
+
+```bash
+V=$(curl -fsSL https://nodejs.org/dist/index.json | grep -o '"v22\.[0-9.]*"' | head -1 | tr -d '"')
+echo "version retenue : $V"
+curl -fsSLO "https://nodejs.org/dist/$V/node-$V-linux-x64.tar.xz"
+sudo mkdir -p /opt/node22
+sudo tar -xJf "node-$V-linux-x64.tar.xz" -C /opt/node22 --strip-components=1
+rm -f "node-$V-linux-x64.tar.xz"
+
+/opt/node22/bin/node -v      # doit afficher v22.x
+node -v                      # doit TOUJOURS afficher v20.20.2
+```
+
+Toutes les commandes `npm` / `npx` de ce projet passent ensuite par un chemin
+absolu : `/opt/node22/bin/npm`, `/opt/node22/bin/npx`.
+
+### Swap — avant toute compilation
+
+```bash
+free -m                                  # relever le total avant/après
+sudo fallocate -l 4G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo sysctl vm.swappiness=10             # ne swapper qu'en dernier recours
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+free -m
+```
+
+### Compiler sous plafond mémoire
+
+Le build est enfermé dans un groupe de contrôle : s'il déborde, **c'est lui**
+qui est arrêté, et non une application de production choisie par le noyau.
+
+```bash
+cd /var/www/plateforma
+/opt/node22/bin/npm ci
+/opt/node22/bin/npx prisma generate
+/opt/node22/bin/npx prisma migrate deploy
+sudo systemd-run --scope -p MemoryMax=2G -p MemorySwapMax=3G \
+  /opt/node22/bin/npm run build
+```
+
+### Le service, sur le port 3002
+
+Vérifier d'abord que le port est bien libre — la commande ne doit rien afficher :
+
+```bash
+sudo ss -tlnp | grep ':3002 '
+```
+
+```bash
+sudo tee /etc/systemd/system/plateforma.service > /dev/null <<'EOF'
+[Unit]
+Description=Plateforma — LMS Nairox
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/plateforma
+Environment=NODE_ENV=production
+ExecStart=/opt/node22/bin/node /var/www/plateforma/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3002
+Restart=always
+RestartSec=5
+# Garde-fou : ce service ne peut pas affamer les autres applications.
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now plateforma
+sudo systemctl status plateforma --no-pager
+curl -I http://127.0.0.1:3002/login      # 200 attendu
+```
+
+Dans la configuration nginx, remplacer les **quatre** `proxy_pass` par le port
+`3002`. Le reste du bloc est inchangé.
+
+### Script de déploiement adapté
+
+```bash
+sudo tee /usr/local/bin/plateforma-deploy > /dev/null <<'EOF'
+#!/bin/bash
+set -euo pipefail
+cd /var/www/plateforma
+git pull --ff-only
+/opt/node22/bin/npm ci
+/opt/node22/bin/npx prisma generate
+/opt/node22/bin/npx prisma migrate deploy
+systemd-run --scope -p MemoryMax=2G -p MemorySwapMax=3G /opt/node22/bin/npm run build
+systemctl restart plateforma
+echo "✓ déployé"
+EOF
+sudo chmod 755 /usr/local/bin/plateforma-deploy
+```
+
+### Après la mise en ligne — contrôler l'existant
+
+```bash
+pm2 list                                  # comeback-site et comeback-app : online
+curl -I https://app.getcomeback.fr        # 200
+curl -I https://nairox.fr                 # 200
+node -v                                   # toujours v20.20.2
+sudo ss -tlnp | grep -E ':(3000|3001|3002) '
+```
+
+---
+
 ## 0. Avant tout — le DNS
 
 Certbot ne peut pas délivrer de certificat tant que le sous-domaine ne pointe
