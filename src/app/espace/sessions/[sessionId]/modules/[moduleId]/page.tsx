@@ -28,10 +28,7 @@ export default async function ModuleExercisesPage({ params }: PageProps<"/espace
       ) : null}
 
       <div>
-        <Link href={`/espace/sessions/${sessionId}`} className="text-sm text-foreground-secondary hover:text-foreground">
-          ← {parentModule.formationVersion.formation.name}
-        </Link>
-        <p className="mt-3 text-xs text-foreground-tertiary">Module {parentModule.order} · {parentModule.title}</p>
+        <p className="text-xs text-foreground-tertiary">Module {parentModule.order} · {parentModule.title}</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Fin de module</h1>
       </div>
 

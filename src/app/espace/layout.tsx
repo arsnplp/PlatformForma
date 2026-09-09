@@ -13,7 +13,7 @@ export default async function EspaceLayout({ children }: LayoutProps<"/espace">)
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <header className="border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-3">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/espace" className="text-sm font-medium">
             Mon espace de formation
           </Link>
@@ -30,7 +30,7 @@ export default async function EspaceLayout({ children }: LayoutProps<"/espace">)
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">{children}</main>
     </div>
   );
 }

@@ -64,10 +64,7 @@ export default async function StudentLessonPage({ params }: PageProps<"/espace/s
       ) : null}
 
       <div>
-        <Link href={`/espace/sessions/${sessionId}`} className="text-sm text-foreground-secondary hover:text-foreground">
-          ← {lesson.module.formationVersion.formation.name}
-        </Link>
-        <p className="mt-3 text-xs text-foreground-tertiary">
+        <p className="text-xs text-foreground-tertiary">
           Module {lesson.module.order} · {lesson.module.title} · leçon {position} sur {total}
         </p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">{lesson.title}</h1>

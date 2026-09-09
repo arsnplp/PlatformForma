@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
@@ -40,10 +39,7 @@ export default async function StudentDocumentsPage({ params }: PageProps<"/espac
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/espace/sessions/${sessionId}`} className="text-sm text-foreground-secondary hover:text-foreground">
-          ← {session.formationVersion.formation.name}
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Mes documents</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Mes documents</h1>
       </div>
 
       {access.role === "preview" ? (

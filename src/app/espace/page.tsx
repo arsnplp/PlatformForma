@@ -22,7 +22,7 @@ export default async function EspacePage() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Bonjour {me.name.split(" ")[0]}</h1>
         <p className="mt-2 text-foreground-secondary">
