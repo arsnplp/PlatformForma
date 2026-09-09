@@ -1,0 +1,14 @@
+# Ce qui ne doit jamais entrer dans l'image.
+node_modules
+.next
+.git
+.github
+src/generated
+.env
+.env.*
+!.env.example
+.playwright-mcp
+.tmp-upload
+*.log
+.DS_Store
+tsconfig.tsbuildinfo

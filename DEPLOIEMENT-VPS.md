@@ -9,6 +9,147 @@ reste à régler* (mails, signature, rétention…) : les deux se lisent ensembl
 
 ---
 
+## Voie recommandée sur ce VPS : Docker
+
+La machine héberge des sites clients et des applications en production
+(ComeBack). **C'est la voie à suivre** : le conteneur n'a ni le même Node, ni
+les mêmes paquets, ni le même système de fichiers, ni PM2. Rien de ce qui
+existe déjà n'est modifié.
+
+Les sections suivantes (installation directe, Node dans `/opt`, service
+systemd) ne servent que si l'on renonce à Docker.
+
+### Ce qui reste malgré tout partagé — et ce qu'on en fait
+
+| Ressource | Partagée ? | Protection |
+| --- | --- | --- |
+| Node, npm, paquets système | **Non** | Tout est dans l'image |
+| Système de fichiers | **Non** | Seul `/var/www/plateforma` existe sur l'hôte |
+| PM2 et ses deux applications | **Non** | Jamais sollicité |
+| Crontab de root | **Non** | Fichier séparé dans `/etc/cron.d` |
+| RAM / CPU | Oui, physiquement | `mem_limit: 1500m`, `cpus: 1.5` : plafonds durs |
+| Docker | Oui, le démon | On ajoute un conteneur ; les autres ne bougent pas |
+| **nginx** | **Oui** | Un fichier de site en plus, puis un `reload` gracieux |
+| Ports 80 / 443 | Oui | Nginx répartit par `server_name` |
+
+**Le seul contact réel est nginx**, et il est inévitable : c'est lui qui tient
+les ports 80 et 443. On ajoute un fichier, on ne touche à aucun autre, et
+`systemctl reload` recharge la configuration **sans couper les connexions en
+cours** — les sites en place ne s'en aperçoivent pas.
+
+### Vérifications avant de commencer
+
+```bash
+df -h /                       # l'image occupe ~1,5 Go
+free -m                       # relever le total ; il n'y a aucun swap
+docker ps                     # les conteneurs existants, à retrouver intacts après
+sudo ss -tlnp | grep ':3002 ' # doit ne rien afficher
+```
+
+### Du swap, en filet de sécurité
+
+La machine n'en a aucun. Sans lui, le moindre pic de mémoire force le noyau à
+tuer un processus — et il vise le plus gros, pas forcément le bon. C'est un
+ajout, il ne modifie rien d'existant :
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+echo 'vm.swappiness=10' | sudo tee /etc/sysctl.d/99-swappiness.conf
+sudo sysctl vm.swappiness=10
+```
+
+### Installation
+
+```bash
+sudo mkdir -p /var/www/plateforma
+sudo chown "$USER:$USER" /var/www/plateforma      # CE dossier seulement
+git clone git@github-plateforma:arsnplp/PlatformForma.git /var/www/plateforma
+cd /var/www/plateforma
+```
+
+Le fichier `.env` (étape 3 plus bas pour le contenu), **sans guillemets** :
+Compose relit ce fichier pour les variables de compilation, et des guillemets
+s'y retrouveraient dans la valeur.
+
+```dotenv
+NEXT_PUBLIC_APP_URL=https://plateforma.nairox.fr
+DATABASE_URL=postgresql://…
+```
+
+```bash
+chmod 600 .env
+```
+
+Construire, migrer, démarrer :
+
+```bash
+cd /var/www/plateforma
+docker compose build                              # ~5 min la première fois
+docker compose --profile outils run --rm outils   # prisma migrate deploy
+docker compose up -d
+docker compose ps
+docker compose logs -f --tail=50                  # Ctrl-C pour sortir
+curl -I http://127.0.0.1:3002/login               # 200 attendu
+```
+
+Sur un projet Supabase neuf uniquement, pour créer rôles et compte admin :
+
+```bash
+docker compose --profile outils run --rm outils tsx prisma/seed.ts
+```
+
+Le build de l'image plafonne la mémoire de Node à 1,5 Go. Pour une garantie
+absolue le jour où la machine est chargée, l'ancien constructeur accepte une
+limite stricte :
+
+```bash
+DOCKER_BUILDKIT=0 docker build --memory=2g -t plateforma:latest .
+```
+
+### Nginx — le seul fichier ajouté
+
+Identique à l'étape 6, avec le port **3002**. Rien d'autre n'est modifié :
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx      # reload, jamais restart
+sudo certbot --nginx -d plateforma.nairox.fr --agree-tos -m enesra92z@gmail.com --redirect
+```
+
+### Mettre à jour
+
+```bash
+cd /var/www/plateforma
+git pull --ff-only
+docker compose build
+docker compose --profile outils run --rm outils
+docker compose up -d                              # remplace le conteneur
+docker image prune -f                             # ne retire que les images orphelines
+```
+
+### Contrôler que rien n'a bougé
+
+```bash
+pm2 list                                  # comeback-site, comeback-app : online
+docker ps                                 # les conteneurs d'avant, toujours là
+node -v                                   # v20.20.2, inchangé
+curl -I https://app.getcomeback.fr        # 200
+curl -I https://nairox.fr                 # 200
+```
+
+### Tout retirer, sans trace
+
+```bash
+cd /var/www/plateforma && docker compose down
+docker rmi plateforma:latest
+sudo rm -f /etc/nginx/sites-enabled/plateforma.nairox.fr && sudo systemctl reload nginx
+sudo rm -f /etc/cron.d/plateforma
+sudo rm -rf /var/www/plateforma
+```
+
+---
+
 ## Réglages retenus pour le VPS `srv1278016`
 
 Audit du 9 septembre 2026. La machine héberge **26 sites**, deux applications

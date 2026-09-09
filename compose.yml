@@ -1,0 +1,41 @@
+# Déploiement isolé. Le conteneur ne partage avec l'hôte que le noyau : ni
+# Node, ni paquets, ni PM2, ni système de fichiers. Le port n'est publié que
+# sur la boucle locale — nginx est le seul à pouvoir l'atteindre.
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        # Interpolées depuis le fichier .env du dossier, par Compose.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    image: plateforma:latest
+    container_name: plateforma
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3002:3000"
+    # Plafonds durs : cette application ne peut pas affamer les autres sites
+    # du serveur, quoi qu'il arrive.
+    mem_limit: 1500m
+    cpus: 1.5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Migrations et seed, à la demande : `docker compose run --rm outils …`
+  # Construit sur l'étape de compilation, seule à contenir la CLI Prisma.
+  outils:
+    build:
+      context: .
+      target: builder
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+    profiles: ["outils"]
+    env_file: .env
+    entrypoint: ["npx"]
+    command: ["prisma", "migrate", "deploy"]
