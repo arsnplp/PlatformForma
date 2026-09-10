@@ -85,13 +85,10 @@ export async function POST(request: NextRequest) {
         }
         send({ type: "done" });
       } catch (error) {
-        // Le détail part dans les logs du serveur : l'utilisateur n'a que faire
-        // d'un message d'API, mais nous en avons besoin pour diagnostiquer.
+        // Le détail brut part dans les logs du serveur ; l'utilisateur reçoit
+        // la cause traduite en geste à faire, quand on la reconnaît.
         console.error("[assistant]", error);
-        const message = error instanceof Anthropic.APIError
-          ? `Mini Arsène n'a pas pu répondre (${error.status}).`
-          : "Mini Arsène n'a pas pu répondre.";
-        send({ type: "error", value: message });
+        send({ type: "error", value: explain(error) });
       } finally {
         controller.close();
       }
@@ -104,4 +101,27 @@ export async function POST(request: NextRequest) {
       "Cache-Control": "no-store",
     },
   });
+}
+
+// Un simple « (400) » ne dit rien : un crédit épuisé, une clé révoquée et une
+// requête mal formée renvoient tous ce code. On reconnaît les causes qui
+// relèvent d'un geste de l'administrateur, et on le lui dit.
+function explain(error: unknown): string {
+  if (!(error instanceof Anthropic.APIError)) return "Mini Arsène n'a pas pu répondre.";
+  const detail = error.message.toLowerCase();
+
+  if (detail.includes("credit balance")) {
+    return "Le crédit du compte Anthropic est épuisé. Rechargez-le dans la console Anthropic (Plans & Billing), puis réessayez.";
+  }
+  if (detail.includes("not scoped to a workspace")) {
+    return "La clé Anthropic n'est rattachée à aucun espace de travail : renseignez ANTHROPIC_WORKSPACE_ID ou créez la clé dans un espace.";
+  }
+  if (error.status === 401 || error.status === 403) {
+    return "La clé Anthropic est refusée (révoquée ou invalide). Vérifiez ANTHROPIC_API_KEY.";
+  }
+  if (error.status === 429) return "Trop de demandes en peu de temps. Réessayez dans une minute.";
+  if (error.status === 529 || (error.status ?? 0) >= 500) {
+    return "Le service d'Anthropic est momentanément indisponible. Réessayez dans quelques instants.";
+  }
+  return `Mini Arsène n'a pas pu répondre (${error.status}).`;
 }
